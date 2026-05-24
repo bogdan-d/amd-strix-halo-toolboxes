@@ -9,6 +9,11 @@ This file tracks the experimental container workflow that should stay separate f
 - `docs-next/` is for documentation that belongs to the new workflow.
 - Existing `toolboxes/`, `refresh-toolboxes.sh`, and the upstream `README.md` remain legacy/upstream-aligned unless a change is intentionally promoted back.
 
+## References
+
+- [llama.cpp argument map](docs-next/llama-cpp-args.md)
+- [Podman workflow](docs-next/podman.md)
+
 ## Podman without Toolbx or Distrobox
 
 If you prefer plain Podman containers, use the helper script instead of creating Toolbx/Distrobox environments:
