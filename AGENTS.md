@@ -1,3 +1,7 @@
+# Current Agent Instructions
+
+Use `AGENTS.override.md` first. It describes the active next-workflow direction for this repo. Everything below this section is legacy upstream context and should be treated as historical guidance unless `AGENTS.override.md` says to work in the legacy paths.
+
 # AI Agent Context: AMD Strix Halo Llama.cpp Toolboxes
 
 **Primary Goal:** This project provides pre-built containers ("toolboxes") for running `llama.cpp` optimally on AMD Ryzen AI Max "Strix Halo" APUs. It simplifies environment setup for ROCm and Vulkan backends, allowing users to leverage up to 124 GiB of unified system memory for LLM inference.
