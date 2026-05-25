@@ -1,13 +1,15 @@
-# ROCm 7.2.3 llama.cpp image for the next raw Podman/Docker workflow.
+# ROCm llama.cpp image for the next raw Podman/Docker workflow.
 #
 # Build from the repository root so this file can copy shared legacy assets:
-#   buildah bud -t amd-strix-halo-toolboxes:rocm-7.2.3 -f containers/Containerfile .
-#   podman build -t amd-strix-halo-toolboxes:rocm-7.2.3 -f containers/Containerfile .
+#   bin/build rocm-7.2.3
+#   bin/build rocm7-nightlies
 
 ARG FEDORA_VERSION=43
 ARG BUILD_TYPE=rocm-7.2.3
 ARG ROCM_VERSION=7.2.3
 ARG ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main
+ARG ROCM_MAJOR_VERSION=7
+ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
 ARG GFX_TARGET=gfx1151
 ARG LLAMA_REPO=https://github.com/ggerganov/llama.cpp.git
 ARG LLAMA_BRANCH=master
@@ -18,13 +20,30 @@ FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
 ARG BUILD_TYPE
 ARG ROCM_VERSION
 ARG ROCM_REPO_URL
+ARG ROCM_MAJOR_VERSION
+ARG ROCM_NIGHTLY_BASE_URL
 ARG GFX_TARGET
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
 
-RUN test "${BUILD_TYPE}" = "rocm-7.2.3"
+RUN case "${BUILD_TYPE}" in \
+  rocm-7.2.3|rocm7-nightlies) ;; \
+  *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
+  esac
 
-RUN printf '%s\n' \
+# Keep downloaded RPMs in the Buildah cache mount. The cache is not committed
+# into the image, so there is no dnf clean step in cached package layers.
+RUN echo 'keepcache=True' >> /etc/dnf/dnf.conf
+
+RUN --mount=type=cache,id=dnf-rocm-base,target=/var/cache/libdnf5 \
+  dnf -y --nodocs --setopt=install_weak_deps=False \
+  --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
+  install \
+  make gcc cmake lld clang clang-devel compiler-rt libcurl-devel ninja-build libatomic \
+  git-core vim sudo rsync patch curl tar xz aria2
+
+RUN if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
+  printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
   "baseurl=${ROCM_REPO_URL}" \
@@ -32,42 +51,71 @@ RUN printf '%s\n' \
   "priority=50" \
   "gpgcheck=1" \
   "gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" \
-  > /etc/yum.repos.d/rocm.repo
-
-# Keep downloaded RPMs in the Buildah cache mount. The cache is not committed
-# into the image, so there is no dnf clean step in cached package layers.
-RUN echo 'keepcache=True' >> /etc/dnf/dnf.conf
+  > /etc/yum.repos.d/rocm.repo; \
+  fi
 
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
+  if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
-  make gcc cmake lld clang clang-devel compiler-rt libcurl-devel ninja-build \
   rocm-llvm rocm-device-libs hip-runtime-amd hip-devel \
   rocblas rocblas-devel hipblas hipblas-devel rocm-cmake libomp-devel libomp \
-  rocminfo radeontop \
-  git-core vim sudo rsync patch
+  rocminfo radeontop; \
+  fi
+
+WORKDIR /tmp
+RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
+  if [ "${BUILD_TYPE}" = "rocm7-nightlies" ]; then \
+  set -euo pipefail; \
+  prefix="therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}"; \
+  key="$(curl -fsSL "${ROCM_NIGHTLY_BASE_URL}?list-type=2&prefix=${prefix}" \
+  | tr '<' '\n' \
+  | grep -o "therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}\..*\.tar\.gz" \
+  | sort -V \
+  | tail -n1)"; \
+  test -n "${key}"; \
+  echo "Latest ROCm nightly tarball: ${key}"; \
+  if [ ! -f "/var/cache/rocm-nightly/${key}" ]; then \
+  aria2c -x 16 -s 16 -j 16 --file-allocation=none \
+  "${ROCM_NIGHTLY_BASE_URL}/${key}" \
+  -d /var/cache/rocm-nightly \
+  -o "${key}"; \
+  fi; \
+  mkdir -p /opt/rocm; \
+  tar xzf "/var/cache/rocm-nightly/${key}" -C /opt/rocm --strip-components=1; \
+  mkdir -p /opt/rocm/amdgcn; \
+  test -e /opt/rocm/amdgcn/bitcode || \
+  ln -s ../lib/llvm/amdgcn/bitcode /opt/rocm/amdgcn/bitcode; \
+  fi
 
 ENV ROCM_PATH=/opt/rocm \
+  HIP_PLATFORM=amd \
   HIP_PATH=/opt/rocm \
   HIP_CLANG_PATH=/opt/rocm/llvm/bin \
+  HIP_INCLUDE_PATH=/opt/rocm/include \
+  HIP_LIB_PATH=/opt/rocm/lib \
   HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode \
-  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
+  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH \
+  LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib \
+  LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
+  CPATH=/opt/rocm/include \
+  PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
 
 WORKDIR /opt/llama.cpp
 
-RUN --mount=type=cache,id=llama-rocm-723,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 
-RUN --mount=type=cache,id=llama-rocm-723,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
   && git submodule update --init --recursive \
   && patch -p1 < /tmp/llama-grammar.patch \
-  && cmake -S . -B build -G Ninja \
+  && cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
   -DGGML_HIP=ON \
   -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
   -DAMDGPU_TARGETS="${GFX_TARGET}" \
@@ -76,13 +124,27 @@ RUN --mount=type=cache,id=llama-rocm-723,target=/opt/llama.cpp \
   -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
   -DROCM_PATH=/opt/rocm \
   -DHIP_PLATFORM=amd \
-  && cmake --build build --config Release \
-  && cmake --install build --config Release
+  && cmake --build "build-${BUILD_TYPE}" --config Release \
+  && cmake --install "build-${BUILD_TYPE}" --config Release
 
-RUN --mount=type=cache,id=llama-rocm-723,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
   mkdir -p /usr/local/lib64 \
-  && find /opt/llama.cpp/build -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
+  && find "/opt/llama.cpp/build-${BUILD_TYPE}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
+  && cp "/opt/llama.cpp/build-${BUILD_TYPE}"/bin/rpc-* /usr/local/bin/ \
   && ldconfig
+
+RUN if [ "${BUILD_TYPE}" = "rocm7-nightlies" ]; then \
+  find /opt/rocm -type f -name '*.a' -delete; \
+  rm -rf \
+  /opt/rocm/include \
+  /opt/rocm/share \
+  /opt/rocm/llvm/include \
+  /opt/rocm/llvm/share; \
+  mkdir -p /opt/rocm-runtime; \
+  cp -a /opt/rocm/. /opt/rocm-runtime/; \
+  else \
+  mkdir -p /opt/rocm-runtime; \
+  fi
 
 COPY toolboxes/gguf-vram-estimator.py /usr/local/bin/gguf-vram-estimator.py
 RUN chmod +x /usr/local/bin/gguf-vram-estimator.py
@@ -94,9 +156,13 @@ ARG BUILD_TYPE
 ARG ROCM_VERSION
 ARG ROCM_REPO_URL
 
-RUN test "${BUILD_TYPE}" = "rocm-7.2.3"
+RUN case "${BUILD_TYPE}" in \
+  rocm-7.2.3|rocm7-nightlies) ;; \
+  *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
+  esac
 
-RUN printf '%s\n' \
+RUN if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
+  printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
   "baseurl=${ROCM_REPO_URL}" \
@@ -104,28 +170,46 @@ RUN printf '%s\n' \
   "priority=50" \
   "gpgcheck=1" \
   "gpgkey=https://repo.radeon.com/rocm/rocm.gpg.key" \
-  > /etc/yum.repos.d/rocm.repo
+  > /etc/yum.repos.d/rocm.repo; \
+  fi
 
 RUN echo 'keepcache=True' >> /etc/dnf/dnf.conf
 
+RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
+  microdnf -y --nodocs --setopt=install_weak_deps=0 \
+  install \
+  bash ca-certificates libatomic libstdc++ libgcc libgomp sudo \
+  radeontop procps-ng python3
+
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
+  if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
-  bash ca-certificates libatomic libstdc++ libgcc libgomp sudo \
-  hip-runtime-amd rocblas hipblas \
-  rocminfo radeontop procps-ng
+  hip-runtime-amd rocblas hipblas rocminfo; \
+  fi
+
+COPY --from=builder /opt/rocm-runtime/ /opt/rocm/
+COPY --from=builder /usr/local/ /usr/local/
 
 ENV ROCM_PATH=/opt/rocm \
+  HIP_PLATFORM=amd \
   HIP_PATH=/opt/rocm \
   HIP_CLANG_PATH=/opt/rocm/llvm/bin \
+  HIP_INCLUDE_PATH=/opt/rocm/include \
+  HIP_LIB_PATH=/opt/rocm/lib \
   HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode \
-  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
-
-COPY --from=builder /usr/local/ /usr/local/
+  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH \
+  LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib \
+  LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
+  CPATH=/opt/rocm/include \
+  PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
 
 RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
   && echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf \
+  && echo "/opt/rocm/lib" >> /etc/ld.so.conf.d/rocm.conf \
+  && echo "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf \
+  && echo "/opt/rocm/llvm/lib" >> /etc/ld.so.conf.d/rocm.conf \
   && ldconfig \
   && cp -n /usr/local/lib/libllama*.so* /usr/lib64/ 2>/dev/null || true \
   && cp -n /usr/local/lib64/libllama*.so* /usr/lib64/ 2>/dev/null || true \
@@ -133,10 +217,17 @@ RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
 
 RUN printf '%s\n' \
   'export ROCM_PATH=/opt/rocm' \
+  'export HIP_PLATFORM=amd' \
   'export HIP_PATH=/opt/rocm' \
   'export HIP_CLANG_PATH=/opt/rocm/llvm/bin' \
+  'export HIP_INCLUDE_PATH=/opt/rocm/include' \
+  'export HIP_LIB_PATH=/opt/rocm/lib' \
   'export HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode' \
   'export PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH' \
+  'export LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib:$LD_LIBRARY_PATH' \
+  'export LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:$LIBRARY_PATH' \
+  'export CPATH=/opt/rocm/include:$CPATH' \
+  'export PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig:$PKG_CONFIG_PATH' \
   > /etc/profile.d/rocm.sh \
   && chmod +x /etc/profile.d/rocm.sh \
   && echo 'source /etc/profile.d/rocm.sh' >> /etc/bashrc

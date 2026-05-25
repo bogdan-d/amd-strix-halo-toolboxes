@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  bin/build [all|rocm-7.2.3|rocm7-nightlies]...
+
+Environment:
+  BUILDER            buildah or podman. Default: buildah
+  IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
+  CONTAINERFILE      Containerfile path. Default: containers/Containerfile
+  BUILD_EXTRA_ARGS   Extra build arguments inserted before the context
+
+Examples:
+  bin/build
+  bin/build rocm-7.2.3
+  bin/build rocm7-nightlies
+  BUILDER=podman bin/build all
+EOF
+}
+
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+BUILDER="${BUILDER:-buildah}"
+IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
+CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
+
+case "$BUILDER" in
+  buildah|podman) ;;
+  *)
+    echo "Unsupported BUILDER: $BUILDER" >&2
+    usage
+    exit 1
+    ;;
+esac
+
+if [[ $# -eq 0 ]]; then
+  set -- all
+fi
+
+TARGETS=()
+for target in "$@"; do
+  case "$target" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    all)
+      TARGETS+=(rocm-7.2.3 rocm7-nightlies)
+      ;;
+    rocm-7.2.3|rocm7-nightlies)
+      TARGETS+=("$target")
+      ;;
+    *)
+      echo "Unknown build target: $target" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+BUILD_EXTRA=()
+if [[ -n "${BUILD_EXTRA_ARGS:-}" ]]; then
+  # Intentional shell splitting: this variable is for advanced build flags.
+  # shellcheck disable=SC2206
+  BUILD_EXTRA=(${BUILD_EXTRA_ARGS})
+fi
+
+build_image() {
+  local build_type="$1"
+  local tag="$IMAGE_PREFIX:$build_type-next"
+
+  printf 'Building %s\n' "$tag"
+
+  if [[ "$BUILDER" == "buildah" ]]; then
+    "$BUILDER" bud \
+      --pull \
+      --format oci \
+      --layers \
+      --build-arg "BUILD_TYPE=$build_type" \
+      -t "$tag" \
+      -f "$CONTAINERFILE" \
+      "${BUILD_EXTRA[@]}" \
+      .
+  else
+    "$BUILDER" build \
+      --pull \
+      --format oci \
+      --layers \
+      --build-arg "BUILD_TYPE=$build_type" \
+      -t "$tag" \
+      -f "$CONTAINERFILE" \
+      "${BUILD_EXTRA[@]}" \
+      .
+  fi
+}
+
+cd "$PROJECT_ROOT"
+
+for target in "${TARGETS[@]}"; do
+  build_image "$target"
+done
