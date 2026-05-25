@@ -38,6 +38,33 @@ bin/podman-llama.sh rocm-7.2.3 server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
+## Local Build
+
+The next workflow has a single experimental Containerfile for ROCm 7.2.3:
+
+```bash
+buildah bud --pull --format oci --layers \
+  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next \
+  -f containers/Containerfile .
+```
+
+Build from the repository root. The Containerfile uses Buildah cache mounts for DNF packages and the llama.cpp checkout, and copies the shared patch/helper assets from `toolboxes/`.
+
+Smoke-test the built image:
+
+```bash
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next llama version
+
+podman run --rm \
+  --security-opt seccomp=unconfined \
+  --security-opt label=disable \
+  --group-add keep-groups \
+  --device /dev/dri \
+  --device /dev/kfd \
+  localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next \
+  llama-cli --list-devices
+```
+
 Start `llama-server` with draft MTP enabled:
 
 ```bash
