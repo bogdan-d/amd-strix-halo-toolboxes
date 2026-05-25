@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build [all|rocm-7.2.3|rocm7-nightlies]...
+  bin/build [all|rocm-7.2.3|rocm7-nightlies|vulkan-radv]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -16,6 +16,7 @@ Examples:
   bin/build
   bin/build rocm-7.2.3
   bin/build rocm7-nightlies
+  bin/build vulkan-radv
   BUILDER=podman bin/build all
 EOF
 }
@@ -46,9 +47,9 @@ for target in "$@"; do
       exit 0
       ;;
     all)
-      TARGETS+=(rocm-7.2.3 rocm7-nightlies)
+      TARGETS+=(rocm-7.2.3 rocm7-nightlies vulkan-radv)
       ;;
-    rocm-7.2.3|rocm7-nightlies)
+    rocm-7.2.3|rocm7-nightlies|vulkan-radv)
       TARGETS+=("$target")
       ;;
     *)

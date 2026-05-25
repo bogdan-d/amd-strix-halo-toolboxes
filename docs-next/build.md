@@ -1,11 +1,11 @@
 # Building Next-Workflow Images
 
 Build from the repository root. The next workflow uses one Containerfile for
-ROCm images and selects the build with `BUILD_TYPE`.
+ROCm and Vulkan images and selects the build with `BUILD_TYPE`.
 
 ## Quick Start
 
-Build both ROCm images:
+Build all next-workflow images:
 
 ```bash
 bin/build
@@ -16,6 +16,7 @@ Build one image:
 ```bash
 bin/build rocm-7.2.3
 bin/build rocm7-nightlies
+bin/build vulkan-radv
 ```
 
 The default tags are:
@@ -24,6 +25,7 @@ The default tags are:
 | :--- | :--- |
 | `rocm-7.2.3` | `localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next` |
 | `rocm7-nightlies` | `localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next` |
+| `vulkan-radv` | `localhost/amd-strix-halo-toolboxes:vulkan-radv-next` |
 
 ## Build Script
 
@@ -71,9 +73,18 @@ buildah bud --pull --format oci --layers \
   -f containers/Containerfile .
 ```
 
+For Vulkan RADV:
+
+```bash
+buildah bud --pull --format oci --layers \
+  --build-arg BUILD_TYPE=vulkan-radv \
+  -t localhost/amd-strix-halo-toolboxes:vulkan-radv-next \
+  -f containers/Containerfile .
+```
+
 The Containerfile uses Buildah cache mounts for DNF packages, ROCm nightly
-tarballs, and the llama.cpp checkout. It also copies the shared patch and helper
-assets from `toolboxes/`.
+tarballs, and the shared llama.cpp checkout. It also copies the shared patch and
+helper assets from `toolboxes/`.
 
 ## Smoke Tests
 
@@ -82,6 +93,7 @@ Check the built binaries:
 ```bash
 podman run --rm localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next llama version
 podman run --rm localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next llama version
+podman run --rm localhost/amd-strix-halo-toolboxes:vulkan-radv-next llama version
 ```
 
 Check GPU visibility:
@@ -103,5 +115,13 @@ podman run --rm \
   --device /dev/dri \
   --device /dev/kfd \
   localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next \
+  llama-cli --list-devices
+
+podman run --rm \
+  --security-opt seccomp=unconfined \
+  --security-opt label=disable \
+  --group-add keep-groups \
+  --device /dev/dri \
+  localhost/amd-strix-halo-toolboxes:vulkan-radv-next \
   llama-cli --list-devices
 ```

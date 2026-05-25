@@ -1,8 +1,9 @@
-# ROCm llama.cpp image for the next raw Podman/Docker workflow.
+# llama.cpp image for the next raw Podman/Docker workflow.
 #
 # Build from the repository root so this file can copy shared legacy assets:
 #   bin/build rocm-7.2.3
 #   bin/build rocm7-nightlies
+#   bin/build vulkan-radv
 
 ARG FEDORA_VERSION=43
 ARG BUILD_TYPE=rocm-7.2.3
@@ -27,7 +28,7 @@ ARG LLAMA_REPO
 ARG LLAMA_BRANCH
 
 RUN case "${BUILD_TYPE}" in \
-  rocm-7.2.3|rocm7-nightlies) ;; \
+  rocm-7.2.3|rocm7-nightlies|vulkan-radv) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
@@ -42,6 +43,8 @@ RUN --mount=type=cache,id=dnf-rocm-base,target=/var/cache/libdnf5 \
   make gcc cmake lld clang clang-devel compiler-rt libcurl-devel ninja-build libatomic \
   git-core vim sudo rsync patch curl tar xz aria2
 
+# ROCm 7.2.3: use AMD's published RHEL 10 repository. This is the stable ROCm
+# path and the only path that installs ROCm from RPMs in the runtime stage.
 RUN if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
@@ -64,6 +67,9 @@ RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
   rocminfo radeontop; \
   fi
 
+# ROCm nightlies: TheRock publishes a self-contained tarball per GPU target.
+# Cache the tarball and copy a trimmed ROCm tree into the final image instead
+# of installing ROCm packages there.
 WORKDIR /tmp
 RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   if [ "${BUILD_TYPE}" = "rocm7-nightlies" ]; then \
@@ -89,6 +95,17 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   ln -s ../lib/llvm/amdgcn/bitcode /opt/rocm/amdgcn/bitcode; \
   fi
 
+# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. No ROCm runtime is
+# copied for this target; llama.cpp is built with GGML_VULKAN below.
+RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
+  if [ "${BUILD_TYPE}" = "vulkan-radv" ]; then \
+  dnf -y --nodocs --setopt=install_weak_deps=False \
+  --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
+  install \
+  vulkan-loader-devel vulkaninfo mesa-vulkan-drivers \
+  spirv-headers-devel radeontop glslc; \
+  fi
+
 ENV ROCM_PATH=/opt/rocm \
   HIP_PLATFORM=amd \
   HIP_PATH=/opt/rocm \
@@ -102,37 +119,66 @@ ENV ROCM_PATH=/opt/rocm \
   CPATH=/opt/rocm/include \
   PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
 
+# Shared llama.cpp checkout. The source cache is shared by all targets, while
+# each target uses its own CMake build directory to avoid stale backend state.
 WORKDIR /opt/llama.cpp
 
-RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 
-RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
   && git submodule update --init --recursive \
-  && patch -p1 < /tmp/llama-grammar.patch \
-  && cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
-  -DGGML_HIP=ON \
-  -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
-  -DAMDGPU_TARGETS="${GFX_TARGET}" \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DGGML_RPC=ON \
-  -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
-  -DROCM_PATH=/opt/rocm \
-  -DHIP_PLATFORM=amd \
+  && patch -p1 < /tmp/llama-grammar.patch
+
+# Backend-specific llama.cpp configuration. Keep the three target blocks close
+# together so it is clear which CMake flags belong to ROCm stable, ROCm nightly,
+# and Vulkan RADV.
+RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
+  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+    -DGGML_HIP=ON \
+    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
+    -DAMDGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DGGML_RPC=ON \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
+    -DROCM_PATH=/opt/rocm \
+    -DHIP_PLATFORM=amd; \
+  elif [ "${BUILD_TYPE}" = "rocm7-nightlies" ]; then \
+  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+    -DGGML_HIP=ON \
+    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
+    -DAMDGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DGGML_RPC=ON \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
+    -DROCM_PATH=/opt/rocm \
+    -DHIP_PLATFORM=amd; \
+  elif [ "${BUILD_TYPE}" = "vulkan-radv" ]; then \
+  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+    -DGGML_VULKAN=ON \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DGGML_RPC=ON \
+    -DLLAMA_BUILD_TESTS=OFF; \
+  fi \
   && cmake --build "build-${BUILD_TYPE}" --config Release \
   && cmake --install "build-${BUILD_TYPE}" --config Release
 
-RUN --mount=type=cache,id=llama-rocm,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   mkdir -p /usr/local/lib64 \
   && find "/opt/llama.cpp/build-${BUILD_TYPE}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
   && cp "/opt/llama.cpp/build-${BUILD_TYPE}"/bin/rpc-* /usr/local/bin/ \
   && ldconfig
 
+# Runtime ROCm payload: official ROCm installs packages in the final stage, so
+# only the nightly tarball target needs a copied /opt/rocm runtime tree.
 RUN if [ "${BUILD_TYPE}" = "rocm7-nightlies" ]; then \
   find /opt/rocm -type f -name '*.a' -delete; \
   rm -rf \
@@ -157,10 +203,12 @@ ARG ROCM_VERSION
 ARG ROCM_REPO_URL
 
 RUN case "${BUILD_TYPE}" in \
-  rocm-7.2.3|rocm7-nightlies) ;; \
+  rocm-7.2.3|rocm7-nightlies|vulkan-radv) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
+# ROCm 7.2.3 runtime packages come from AMD's repository. Nightlies bring their
+# own /opt/rocm tree from the builder; Vulkan uses only Fedora Mesa packages.
 RUN if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
@@ -181,12 +229,23 @@ RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
   bash ca-certificates libatomic libstdc++ libgcc libgomp sudo \
   radeontop procps-ng python3
 
+# ROCm 7.2.3 runtime: install only the runtime libraries needed by llama.cpp.
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "rocm-7.2.3" ]; then \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
   hip-runtime-amd rocblas hipblas rocminfo; \
+  fi
+
+# Vulkan RADV runtime: Mesa driver and Vulkan loader from Fedora. Only /dev/dri
+# is required at run time for this target.
+RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
+  if [ "${BUILD_TYPE}" = "vulkan-radv" ]; then \
+  microdnf -y --nodocs --setopt=install_weak_deps=0 \
+  --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
+  install \
+  vulkan-loader vulkaninfo mesa-vulkan-drivers; \
   fi
 
 COPY --from=builder /opt/rocm-runtime/ /opt/rocm/
