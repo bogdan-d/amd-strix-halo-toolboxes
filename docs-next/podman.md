@@ -4,17 +4,13 @@ You can run the published images directly with Podman. This avoids creating Tool
 
 ## Backends
 
-The helper script supports the same primary setups as the README:
+The helper script supports the local next-workflow images:
 
 | Backend | Image | GPU devices |
 | :--- | :--- | :--- |
-| `vulkan-radv` | `docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv` | `/dev/dri` |
-| `vulkan-amdvlk` | `docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-amdvlk` | `/dev/dri` |
-| `rocm-6.4.4` | `docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-6.4.4` | `/dev/dri`, `/dev/kfd` |
-| `rocm-7.2.3` | `docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.3` | `/dev/dri`, `/dev/kfd` |
-| `rocm7-nightlies` | `docker.io/kyuz0/amd-strix-halo-toolboxes:rocm7-nightlies` | `/dev/dri`, `/dev/kfd` |
-| `vulkan-radv-mtp` | `docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv-mtp` | `/dev/dri` |
-| `rocm-7.2.3-mtp` | `docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.3-mtp` | `/dev/dri`, `/dev/kfd` |
+| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | `/dev/dri`, `/dev/kfd` |
+| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | `/dev/dri`, `/dev/kfd` |
+| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | `/dev/dri` |
 
 ## Quick Start
 
@@ -27,26 +23,26 @@ export MODELS_DIR=/var/mnt/xdata/models
 Check GPU visibility:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 list-devices
-bin/podman-llama.sh vulkan-radv list-devices
+bin/podman-llama.sh rocm list-devices
+bin/podman-llama.sh vulkan list-devices
 ```
 
 Start `llama-server`:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 server \
+bin/podman-llama.sh rocm server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 ## Local Builds
 
-Use `bin/build` to build next-workflow images from `containers/Containerfile`.
+Use `bin/build.sh` to build next-workflow images from `containers/Containerfile`.
 See [build.md](build.md) for build targets and smoke tests.
 
 Start `llama-server` with draft MTP enabled:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3-mtp mtp-server \
+bin/podman-llama.sh rocm mtp-server \
   /var/mnt/xdata/models/qwen-mtp/model.gguf \
   3
 ```
@@ -56,14 +52,14 @@ The `3` means `--spec-draft-n-max 3`. Use `2` for MTP-2.
 The server listens on port `8080` by default. Override it with:
 
 ```bash
-LLAMA_PORT=8081 bin/podman-llama.sh vulkan-radv server \
+LLAMA_PORT=8081 bin/podman-llama.sh vulkan server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 Run `llama-cli`:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 cli \
+bin/podman-llama.sh rocm cli \
   /var/mnt/xdata/models/qwen/model.gguf \
   -p "Write a Strix Halo toolkit haiku."
 ```
@@ -71,7 +67,7 @@ bin/podman-llama.sh rocm-7.2.3 cli \
 Run `llama-bench`:
 
 ```bash
-bin/podman-llama.sh vulkan-radv bench \
+bin/podman-llama.sh vulkan bench \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
@@ -93,14 +89,14 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 Override these with environment variables:
 
 ```bash
-LLAMA_CONTEXT=65536 LLAMA_UBATCH=512 bin/podman-llama.sh vulkan-radv server \
+LLAMA_CONTEXT=65536 LLAMA_UBATCH=512 bin/podman-llama.sh vulkan server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 Or pass llama.cpp flags at the end; trailing flags are preserved:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 server \
+bin/podman-llama.sh rocm server \
   /var/mnt/xdata/models/qwen/model.gguf \
   -c 8192 -ub 1024
 ```
@@ -108,14 +104,14 @@ bin/podman-llama.sh rocm-7.2.3 server \
 Run an RPC worker:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 rpc-server
+bin/podman-llama.sh rocm rpc-server
 ```
 
 ## Raw Podman Commands
 
 The helper expands to commands like these.
 
-Vulkan RADV:
+Vulkan:
 
 ```bash
 podman run --rm -it \
@@ -124,14 +120,14 @@ podman run --rm -it \
   --group-add keep-groups \
   --ipc=host \
   --device /dev/dri \
-  -v /var/mnt/xdata/models:/models \
+  -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
-  docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv \
-  llama-server -m /models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
+  localhost/amd-strix-halo-toolboxes:vulkan \
+  llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
     -c 32768 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap
 ```
 
-ROCm 7.2.3:
+ROCm:
 
 ```bash
 podman run --rm -it \
@@ -141,16 +137,16 @@ podman run --rm -it \
   --ipc=host \
   --device /dev/dri \
   --device /dev/kfd \
-  -v /var/mnt/xdata/models:/models \
+  -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
-  docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.3 \
-  llama-server -m /models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
+  localhost/amd-strix-halo-toolboxes:rocm \
+  llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
     -c 32768 -b 2048 -ub 2048 -ngl 999 -fa 1 --no-mmap
 ```
 
 Use the image tags in the backend table to switch between setups.
 
-MTP RADV:
+MTP Vulkan:
 
 ```bash
 podman run --rm -it \
@@ -159,10 +155,10 @@ podman run --rm -it \
   --group-add keep-groups \
   --ipc=host \
   --device /dev/dri \
-  -v /var/mnt/xdata/models:/models \
+  -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
-  docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv-mtp \
-  llama-server -m /models/qwen-mtp/model.gguf --host 0.0.0.0 --port 8080 \
+  localhost/amd-strix-halo-toolboxes:vulkan \
+  llama-server -m /root/models/qwen-mtp/model.gguf --host 0.0.0.0 --port 8080 \
     -c 32768 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap \
     --spec-type draft-mtp --spec-draft-n-max 3 -np 1
 ```

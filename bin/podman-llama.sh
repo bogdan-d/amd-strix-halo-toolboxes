@@ -7,13 +7,9 @@ Usage:
   bin/podman-llama.sh <backend> <command> [args...]
 
 Backends:
-  vulkan-radv
-  vulkan-amdvlk
-  rocm-6.4.4
-  rocm-7.2.3
-  rocm7-nightlies
-  vulkan-radv-mtp
-  rocm-7.2.3-mtp
+  rocm       Stable ROCm image
+  rocm-next  ROCm nightly image
+  vulkan     Vulkan RADV image
 
 Commands:
   shell                 Open a shell in a running selected image, or start one
@@ -29,8 +25,9 @@ Commands:
 
 Environment:
   .env                  Root project .env is loaded automatically if present
+  IMAGE_PREFIX          Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
   MODELS_DIR            Host model directory to mount. Default: ~/models
-  CONTAINER_MODELS_DIR  Container model directory. Default: /models
+  CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
   LLAMA_PORT            Host/container server port. Default: 8080
   RPC_PORT              Host/container RPC port. Default: 50052
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 32768
@@ -42,14 +39,15 @@ Environment:
   HF_CACHE_DIR          Host Hugging Face cache directory. Default: ~/.cache/huggingface
   HF_HOME               Container Hugging Face cache directory. Default: /root/.cache/huggingface
   PODMAN_CONTAINER      Existing container name/id to use for shell
+  PODMAN_NAME           Container name for new shell/server/rpc-server containers
+  PODMAN_NAME_PREFIX    Container name prefix. Default: amd-strix-halo-llama
   PODMAN_EXTRA_ARGS     Extra arguments inserted before the image name
 
 Examples:
-  bin/podman-llama.sh rocm-7.2.3 list-devices
-  bin/podman-llama.sh vulkan-radv server ~/models/model.gguf
-  bin/podman-llama.sh vulkan-radv-mtp mtp-server ~/models/model.gguf 3
-  bin/podman-llama.sh rocm7-nightlies cli ~/models/model.gguf -p "Hello"
-  bin/podman-llama.sh rocm-6.4.4 rpc-server
+  bin/podman-llama.sh rocm list-devices
+  bin/podman-llama.sh vulkan server ~/models/model.gguf
+  bin/podman-llama.sh rocm-next cli ~/models/model.gguf -p "Hello"
+  bin/podman-llama.sh rocm rpc-server
 EOF
 }
 
@@ -86,40 +84,24 @@ fi
 BACKEND="$1"
 ACTION="$2"
 shift 2
+IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 
 case "$BACKEND" in
-  vulkan-radv|vulkan_radv)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv"
+  vulkan|vulkan-radv|vulkan_radv)
+    BACKEND_NAME="vulkan"
+    IMAGE="$IMAGE_PREFIX:vulkan"
     DEVICE_ARGS=(--device /dev/dri)
     DEFAULT_UBATCH=512
     ;;
-  vulkan-radv-mtp|vulkan_radv_mtp)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv-mtp"
-    DEVICE_ARGS=(--device /dev/dri)
-    DEFAULT_UBATCH=512
-    ;;
-  vulkan-amdvlk|vulkan_amdvlk)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-amdvlk"
-    DEVICE_ARGS=(--device /dev/dri)
-    DEFAULT_UBATCH=512
-    ;;
-  rocm-6.4.4|rocm6_4_4)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-6.4.4"
+  rocm|rocm-7.2.3|rocm-7_2_3)
+    BACKEND_NAME="rocm"
+    IMAGE="$IMAGE_PREFIX:rocm"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_UBATCH=2048
     ;;
-  rocm-7.2.3|rocm-7_2_3)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.3"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_UBATCH=2048
-    ;;
-  rocm-7.2.3-mtp|rocm-7_2_3_mtp)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.3-mtp"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_UBATCH=2048
-    ;;
-  rocm7-nightlies)
-    IMAGE="docker.io/kyuz0/amd-strix-halo-toolboxes:rocm7-nightlies"
+  rocm-next|rocm7-nightlies)
+    BACKEND_NAME="rocm-next"
+    IMAGE="$IMAGE_PREFIX:rocm-next"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_UBATCH=2048
     ;;
@@ -131,7 +113,7 @@ case "$BACKEND" in
 esac
 
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
-CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/models}"
+CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 RPC_PORT="${RPC_PORT:-50052}"
 LLAMA_CONTEXT="${LLAMA_CONTEXT:-32768}"
@@ -142,6 +124,8 @@ LLAMA_BENCH_NGL="${LLAMA_BENCH_NGL:-99}"
 LLAMA_PREDICT="${LLAMA_PREDICT:--1}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 HF_HOME="${HF_HOME:-/root/.cache/huggingface}"
+PODMAN_NAME_PREFIX="${PODMAN_NAME_PREFIX:-amd-strix-halo-llama}"
+DEFAULT_CONTAINER_NAME="$PODMAN_NAME_PREFIX-$BACKEND_NAME-$ACTION"
 
 if [[ "$ACTION" == "pull" ]]; then
   exec podman pull "$IMAGE"
@@ -203,6 +187,10 @@ fi
 mkdir -p "$HF_CACHE_DIR"
 CACHE_ARGS=(--volume "$HF_CACHE_DIR:$HF_HOME" --env "HF_HOME=$HF_HOME")
 
+container_name_args() {
+  printf '%s\n' --name "${PODMAN_NAME:-$DEFAULT_CONTAINER_NAME}"
+}
+
 running_container_id() {
   local ids=()
 
@@ -257,6 +245,7 @@ case "$ACTION" in
     if CONTAINER_ID="$(running_container_id)"; then
       exec podman exec "${RUN_TTY[@]}" "$CONTAINER_ID" /bin/bash
     fi
+    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     base_run /bin/bash
     ;;
   list-devices)
@@ -266,7 +255,8 @@ case "$ACTION" in
     require_model "$@"
     MODEL="$(container_model_path "$1")"
     shift
-    PODMAN_RUN_ARGS=(-p "$LLAMA_PORT:$LLAMA_PORT")
+    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
+    PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
     base_run llama-server \
       -m "$MODEL" \
       --host 0.0.0.0 \
@@ -288,7 +278,8 @@ case "$ACTION" in
       DRAFT_N="$1"
       shift
     fi
-    PODMAN_RUN_ARGS=(-p "$LLAMA_PORT:$LLAMA_PORT")
+    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
+    PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
     base_run llama-server \
       -m "$MODEL" \
       --host 0.0.0.0 \
@@ -335,7 +326,8 @@ case "$ACTION" in
       "$@"
     ;;
   rpc-server)
-    PODMAN_RUN_ARGS=(-p "$RPC_PORT:$RPC_PORT")
+    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
+    PODMAN_RUN_ARGS+=(-p "$RPC_PORT:$RPC_PORT")
     base_run rpc-server \
       -H 0.0.0.0 \
       -p "$RPC_PORT" \

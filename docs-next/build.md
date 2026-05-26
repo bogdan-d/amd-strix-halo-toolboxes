@@ -8,49 +8,60 @@ ROCm and Vulkan images and selects the build with `BUILD_TYPE`.
 Build all next-workflow images:
 
 ```bash
-bin/build
+bin/build.sh
 ```
 
 Build one image:
 
 ```bash
-bin/build rocm-7.2.3
-bin/build rocm7-nightlies
-bin/build vulkan-radv
+bin/build.sh rocm
+bin/build.sh rocm-next
+bin/build.sh vulkan
 ```
 
 The default tags are:
 
 | Target | Image |
 | :--- | :--- |
-| `rocm-7.2.3` | `localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next` |
-| `rocm7-nightlies` | `localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next` |
-| `vulkan-radv` | `localhost/amd-strix-halo-toolboxes:vulkan-radv-next` |
+| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` |
+| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` |
+| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` |
+
+By default, `rocm` is also tagged as
+`localhost/amd-strix-halo-toolboxes:rocm-7.2.3`, and `rocm-next` is also tagged
+as `localhost/amd-strix-halo-toolboxes:rocm7-nightlies`.
 
 ## Build Script
 
-`bin/build` uses Buildah by default:
+`bin/build.sh` uses Buildah by default:
 
 ```bash
-bin/build rocm-7.2.3
+bin/build.sh rocm
+bin/build.sh rocm=7.2.3
 ```
 
 Use Podman instead:
 
 ```bash
-BUILDER=podman bin/build rocm7-nightlies
+BUILDER=podman bin/build.sh rocm-next
 ```
 
 Override the image prefix:
 
 ```bash
-IMAGE_PREFIX=localhost/strix-halo bin/build rocm-7.2.3
+IMAGE_PREFIX=localhost/strix-halo bin/build.sh rocm
 ```
 
 Pass advanced build flags with `BUILD_EXTRA_ARGS`:
 
 ```bash
-BUILD_EXTRA_ARGS="--no-cache" bin/build rocm-7.2.3
+BUILD_EXTRA_ARGS="--no-cache" bin/build.sh rocm
+```
+
+Disable the extra version/nightly alias tags:
+
+```bash
+TAG_VERSION=0 TAG_NIGHTLY_ALIAS=0 bin/build.sh all
 ```
 
 ## Manual Build
@@ -59,8 +70,11 @@ The script expands to commands like this:
 
 ```bash
 buildah bud --pull --format oci --layers \
-  --build-arg BUILD_TYPE=rocm-7.2.3 \
-  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next \
+  --build-arg BUILD_TYPE=rocm \
+  --build-arg ROCM_VERSION=7.2.3 \
+  --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
+  -t localhost/amd-strix-halo-toolboxes:rocm \
+  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
   -f containers/Containerfile .
 ```
 
@@ -68,17 +82,18 @@ For nightly ROCm:
 
 ```bash
 buildah bud --pull --format oci --layers \
-  --build-arg BUILD_TYPE=rocm7-nightlies \
-  -t localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next \
+  --build-arg BUILD_TYPE=rocm-next \
+  -t localhost/amd-strix-halo-toolboxes:rocm-next \
+  -t localhost/amd-strix-halo-toolboxes:rocm7-nightlies \
   -f containers/Containerfile .
 ```
 
-For Vulkan RADV:
+For Vulkan:
 
 ```bash
 buildah bud --pull --format oci --layers \
-  --build-arg BUILD_TYPE=vulkan-radv \
-  -t localhost/amd-strix-halo-toolboxes:vulkan-radv-next \
+  --build-arg BUILD_TYPE=vulkan \
+  -t localhost/amd-strix-halo-toolboxes:vulkan \
   -f containers/Containerfile .
 ```
 
@@ -91,9 +106,9 @@ helper assets from `toolboxes/`.
 Check the built binaries:
 
 ```bash
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next llama version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next llama version
-podman run --rm localhost/amd-strix-halo-toolboxes:vulkan-radv-next llama version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm llama version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next llama version
+podman run --rm localhost/amd-strix-halo-toolboxes:vulkan llama version
 ```
 
 Check GPU visibility:
@@ -105,7 +120,7 @@ podman run --rm \
   --group-add keep-groups \
   --device /dev/dri \
   --device /dev/kfd \
-  localhost/amd-strix-halo-toolboxes:rocm-7.2.3-next \
+  localhost/amd-strix-halo-toolboxes:rocm \
   llama-cli --list-devices
 
 podman run --rm \
@@ -114,7 +129,7 @@ podman run --rm \
   --group-add keep-groups \
   --device /dev/dri \
   --device /dev/kfd \
-  localhost/amd-strix-halo-toolboxes:rocm7-nightlies-next \
+  localhost/amd-strix-halo-toolboxes:rocm-next \
   llama-cli --list-devices
 
 podman run --rm \
@@ -122,6 +137,6 @@ podman run --rm \
   --security-opt label=disable \
   --group-add keep-groups \
   --device /dev/dri \
-  localhost/amd-strix-halo-toolboxes:vulkan-radv-next \
+  localhost/amd-strix-halo-toolboxes:vulkan \
   llama-cli --list-devices
 ```
