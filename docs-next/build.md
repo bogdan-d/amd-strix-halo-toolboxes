@@ -58,6 +58,14 @@ Pass advanced build flags with `BUILD_EXTRA_ARGS`:
 BUILD_EXTRA_ARGS="--no-cache" bin/build.sh rocm
 ```
 
+The stable `rocm` target pins llama.cpp to `95405ac65` by default, matching the
+upstream ROCm 7.2.3 toolbox image known to load models on Strix Halo. Override it
+only when testing a newer llama.cpp commit:
+
+```bash
+LLAMA_ROCM_REF=master bin/build.sh rocm
+```
+
 Disable the extra version/nightly alias tags:
 
 ```bash
@@ -73,6 +81,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm \
   --build-arg ROCM_VERSION=7.2.3 \
   --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
+  --build-arg LLAMA_ROCM_REF=95405ac65 \
   -t localhost/amd-strix-halo-toolboxes:rocm \
   -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
   -f containers/Containerfile .

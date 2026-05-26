@@ -188,7 +188,7 @@ mkdir -p "$HF_CACHE_DIR"
 CACHE_ARGS=(--volume "$HF_CACHE_DIR:$HF_HOME" --env "HF_HOME=$HF_HOME")
 
 container_name_args() {
-  printf '%s\n' --name "${PODMAN_NAME:-$DEFAULT_CONTAINER_NAME}"
+  printf '%s\n' --replace --name "${PODMAN_NAME:-$DEFAULT_CONTAINER_NAME}"
 }
 
 running_container_id() {

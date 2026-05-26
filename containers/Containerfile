@@ -14,6 +14,9 @@ ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
 ARG GFX_TARGET=gfx1151
 ARG LLAMA_REPO=https://github.com/ggerganov/llama.cpp.git
 ARG LLAMA_BRANCH=master
+# Stable ROCm 7.2.3 currently crashes with newer llama.cpp master during HIP
+# stream creation on Strix Halo. Match the upstream toolbox image commit.
+ARG LLAMA_ROCM_REF=95405ac65
 
 # build stage
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
@@ -26,6 +29,7 @@ ARG ROCM_NIGHTLY_BASE_URL
 ARG GFX_TARGET
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
+ARG LLAMA_ROCM_REF
 
 RUN case "${BUILD_TYPE}" in \
   rocm|rocm-next|vulkan) ;; \
@@ -106,19 +110,6 @@ RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
   spirv-headers-devel radeontop glslc; \
   fi
 
-ENV ROCM_PATH=/opt/rocm \
-  HIP_PLATFORM=amd \
-  HIP_PATH=/opt/rocm \
-  HIP_CLANG_PATH=/opt/rocm/llvm/bin \
-  HIP_INCLUDE_PATH=/opt/rocm/include \
-  HIP_LIB_PATH=/opt/rocm/lib \
-  HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode \
-  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH \
-  LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib \
-  LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
-  CPATH=/opt/rocm/include \
-  PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
-
 # Shared llama.cpp checkout. The source cache is shared by all targets, while
 # each target uses its own CMake build directory to avoid stale backend state.
 WORKDIR /opt/llama.cpp
@@ -132,6 +123,9 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
+  && if [ "${BUILD_TYPE}" = "rocm" ] && [ -n "${LLAMA_ROCM_REF}" ]; then \
+    git checkout --detach "${LLAMA_ROCM_REF}"; \
+  fi \
   && git submodule update --init --recursive \
   && patch -p1 < /tmp/llama-grammar.patch
 
@@ -139,9 +133,11 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 # together so it is clear which CMake flags belong to ROCm stable, ROCm next,
 # and Vulkan.
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
-  if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  rm -rf "build-${BUILD_TYPE}" \
+  && if [ "${BUILD_TYPE}" = "rocm" ]; then \
   cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
     -DGGML_HIP=ON \
+    -DGGML_NATIVE=OFF \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -149,10 +145,13 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
     -DROCM_PATH=/opt/rocm \
+    -DHIP_PATH=/opt/rocm \
+    -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
   elif [ "${BUILD_TYPE}" = "rocm-next" ]; then \
   cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
     -DGGML_HIP=ON \
+    -DGGML_NATIVE=OFF \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -160,10 +159,13 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
     -DROCM_PATH=/opt/rocm \
+    -DHIP_PATH=/opt/rocm \
+    -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
   elif [ "${BUILD_TYPE}" = "vulkan" ]; then \
   cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
     -DGGML_VULKAN=ON \
+    -DGGML_NATIVE=OFF \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=ON \
     -DLLAMA_BUILD_TESTS=OFF; \
@@ -251,19 +253,10 @@ RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
 COPY --from=builder /opt/rocm-runtime/ /opt/rocm/
 COPY --from=builder /usr/local/ /usr/local/
 
-ENV ROCM_PATH=/opt/rocm \
-  HIP_PLATFORM=amd \
-  HIP_PATH=/opt/rocm \
-  HIP_CLANG_PATH=/opt/rocm/llvm/bin \
-  HIP_INCLUDE_PATH=/opt/rocm/include \
-  HIP_LIB_PATH=/opt/rocm/lib \
-  HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode \
-  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH \
-  LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib \
-  LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
-  CPATH=/opt/rocm/include \
-  PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
-
+# Keep ROCm discoverable through ldconfig, not process-wide HIP/ROCm
+# environment variables. The stable upstream toolbox image does not export
+# those variables, and setting them globally can crash ROCm 7.2.3 during model
+# load on Strix Halo.
 RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
   && echo "/usr/local/lib64" >> /etc/ld.so.conf.d/local.conf \
   && echo "/opt/rocm/lib" >> /etc/ld.so.conf.d/rocm.conf \
@@ -273,22 +266,5 @@ RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
   && cp -n /usr/local/lib/libllama*.so* /usr/lib64/ 2>/dev/null || true \
   && cp -n /usr/local/lib64/libllama*.so* /usr/lib64/ 2>/dev/null || true \
   && ldconfig
-
-RUN printf '%s\n' \
-  'export ROCM_PATH=/opt/rocm' \
-  'export HIP_PLATFORM=amd' \
-  'export HIP_PATH=/opt/rocm' \
-  'export HIP_CLANG_PATH=/opt/rocm/llvm/bin' \
-  'export HIP_INCLUDE_PATH=/opt/rocm/include' \
-  'export HIP_LIB_PATH=/opt/rocm/lib' \
-  'export HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode' \
-  'export PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH' \
-  'export LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib:$LD_LIBRARY_PATH' \
-  'export LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:$LIBRARY_PATH' \
-  'export CPATH=/opt/rocm/include:$CPATH' \
-  'export PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig:$PKG_CONFIG_PATH' \
-  > /etc/profile.d/rocm.sh \
-  && chmod +x /etc/profile.d/rocm.sh \
-  && echo 'source /etc/profile.d/rocm.sh' >> /etc/bashrc
 
 CMD ["/bin/bash"]
