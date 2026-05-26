@@ -204,7 +204,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
-  mkdir -p /usr/local/lib64 \
+  && mkdir -p /usr/local/lib64 \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
   && cp "/opt/llama.cpp/${build_dir}"/bin/rpc-* /usr/local/bin/ \
   && ldconfig
@@ -292,9 +292,6 @@ RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
   && echo "/opt/rocm/lib" >> /etc/ld.so.conf.d/rocm.conf \
   && echo "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf \
   && echo "/opt/rocm/llvm/lib" >> /etc/ld.so.conf.d/rocm.conf \
-  && ldconfig \
-  && cp -n /usr/local/lib/libllama*.so* /usr/lib64/ 2>/dev/null || true \
-  && cp -n /usr/local/lib64/libllama*.so* /usr/lib64/ 2>/dev/null || true \
   && ldconfig
 
 CMD ["/bin/bash"]

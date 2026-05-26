@@ -15,6 +15,7 @@ Environment:
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
+  BUILD_CACHE_REPO   Optional remote registry repo prefix for Buildah cache
   DRY_RUN            Print build commands without running them. Default: 0
   BUILD_EXTRA_ARGS   Extra build arguments inserted before the context
 
@@ -108,8 +109,15 @@ build_image() {
   local build_type="$1"
   local rocm_repo_url="https://repo.radeon.com/rocm/rhel10/${ROCM_VERSION}/main"
   local tag_args=()
-  local build_cache_suffix="${build_type}-${CPU_TARGET}"
+  local cache_args=()
   local cmd=()
+
+  if [[ -n "${BUILD_CACHE_REPO:-}" ]]; then
+    cache_args=(
+      --cache-from "$BUILD_CACHE_REPO/$build_type-$CPU_TARGET"
+      --cache-to "$BUILD_CACHE_REPO/$build_type-$CPU_TARGET"
+    )
+  fi
 
   case "$build_type" in
     rocm)
@@ -159,8 +167,7 @@ build_image() {
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
-      --cache-from "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
-      --cache-to "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
+      "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \
       "${BUILD_EXTRA[@]}" \
@@ -175,8 +182,7 @@ build_image() {
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
-      --cache-from "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
-      --cache-to "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
+      "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \
       "${BUILD_EXTRA[@]}" \
