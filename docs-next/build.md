@@ -66,6 +66,21 @@ only when testing a newer llama.cpp commit:
 LLAMA_ROCM_REF=master bin/build.sh rocm
 ```
 
+The default CPU target is `generic`, which disables host-native CPU detection so
+local and future GitHub runner builds do not silently differ. Use
+`CPU_TARGET=strix-halo` to enable explicit Strix Halo AVX512/VNNI/BF16 flags, or
+`CPU_TARGET=native` for local experiments:
+
+```bash
+CPU_TARGET=strix-halo bin/build.sh rocm
+```
+
+Non-generic CPU targets use only variant tags, for example `rocm-strix-halo`,
+`rocm-7.2.3-strix-halo`, and `rocm-next-strix-halo`. They do not overwrite
+the default `rocm`, `rocm-next`, or `vulkan` tags. Buildah cache image names
+and CMake build directories include the CPU target, so generic and Strix Halo
+builds do not reuse each other's CMake cache.
+
 Disable the extra version/nightly alias tags:
 
 ```bash
@@ -82,6 +97,9 @@ buildah bud --pull --format oci --layers \
   --build-arg ROCM_VERSION=7.2.3 \
   --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
   --build-arg LLAMA_ROCM_REF=95405ac65 \
+  --build-arg CPU_TARGET=generic \
+  --cache-from localhost/amd-strix-halo-toolboxes:build-cache-rocm-generic \
+  --cache-to localhost/amd-strix-halo-toolboxes:build-cache-rocm-generic \
   -t localhost/amd-strix-halo-toolboxes:rocm \
   -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
   -f containers/Containerfile .

@@ -12,6 +12,7 @@ ARG ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main
 ARG ROCM_MAJOR_VERSION=7
 ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
 ARG GFX_TARGET=gfx1151
+ARG CPU_TARGET=generic
 ARG LLAMA_REPO=https://github.com/ggerganov/llama.cpp.git
 ARG LLAMA_BRANCH=master
 # Stable ROCm 7.2.3 currently crashes with newer llama.cpp master during HIP
@@ -27,6 +28,7 @@ ARG ROCM_REPO_URL
 ARG ROCM_MAJOR_VERSION
 ARG ROCM_NIGHTLY_BASE_URL
 ARG GFX_TARGET
+ARG CPU_TARGET
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
 ARG LLAMA_ROCM_REF
@@ -110,6 +112,21 @@ RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
   spirv-headers-devel radeontop glslc; \
   fi
 
+# Build-time ROCm/HIP paths are needed for the TheRock nightly tarball target.
+# They are intentionally not exported in the final runtime image.
+ENV ROCM_PATH=/opt/rocm \
+  HIP_PLATFORM=amd \
+  HIP_PATH=/opt/rocm \
+  HIP_CLANG_PATH=/opt/rocm/llvm/bin \
+  HIP_INCLUDE_PATH=/opt/rocm/include \
+  HIP_LIB_PATH=/opt/rocm/lib \
+  HIP_DEVICE_LIB_PATH=/opt/rocm/amdgcn/bitcode \
+  PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH \
+  LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64:/opt/rocm/llvm/lib \
+  LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib64 \
+  CPATH=/opt/rocm/include \
+  PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
+
 # Shared llama.cpp checkout. The source cache is shared by all targets, while
 # each target uses its own CMake build directory to avoid stale backend state.
 WORKDIR /opt/llama.cpp
@@ -132,12 +149,24 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 # Backend-specific llama.cpp configuration. Keep the three target blocks close
 # together so it is clear which CMake flags belong to ROCm stable, ROCm next,
 # and Vulkan.
+# CPU_TARGET controls the CPU code path independently from the GPU backend:
+# generic    portable AVX2 build, reproducible across normal x86_64 runners
+# strix-halo explicit Strix Halo AVX512/VNNI/BF16 features, reproducible when
+#             building on a runner whose compiler supports those switches
+# native     host-native detection for local experiments only
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
-  rm -rf "build-${BUILD_TYPE}" \
+  case "${CPU_TARGET}" in \
+    generic) cpu_flags="-DGGML_NATIVE=OFF" ;; \
+    strix-halo) cpu_flags="-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_BMI2=ON -DGGML_AVX_VNNI=ON -DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX512_BF16=ON" ;; \
+    native) cpu_flags="-DGGML_NATIVE=ON" ;; \
+    *) echo "Unsupported CPU_TARGET: ${CPU_TARGET}" >&2; exit 1 ;; \
+  esac \
+  && build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
+  && rm -rf "${build_dir}" \
   && if [ "${BUILD_TYPE}" = "rocm" ]; then \
-  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+  cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
-    -DGGML_NATIVE=OFF \
+    ${cpu_flags} \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -149,9 +178,9 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
   elif [ "${BUILD_TYPE}" = "rocm-next" ]; then \
-  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+  cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
-    -DGGML_NATIVE=OFF \
+    ${cpu_flags} \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -163,20 +192,21 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
   elif [ "${BUILD_TYPE}" = "vulkan" ]; then \
-  cmake -S . -B "build-${BUILD_TYPE}" -G Ninja \
+  cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_VULKAN=ON \
-    -DGGML_NATIVE=OFF \
+    ${cpu_flags} \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=ON \
     -DLLAMA_BUILD_TESTS=OFF; \
   fi \
-  && cmake --build "build-${BUILD_TYPE}" --config Release \
-  && cmake --install "build-${BUILD_TYPE}" --config Release
+  && cmake --build "${build_dir}" --config Release \
+  && cmake --install "${build_dir}" --config Release
 
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
   mkdir -p /usr/local/lib64 \
-  && find "/opt/llama.cpp/build-${BUILD_TYPE}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
-  && cp "/opt/llama.cpp/build-${BUILD_TYPE}"/bin/rpc-* /usr/local/bin/ \
+  && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
+  && cp "/opt/llama.cpp/${build_dir}"/bin/rpc-* /usr/local/bin/ \
   && ldconfig
 
 # Runtime ROCm payload: official ROCm installs packages in the final stage, so

@@ -12,6 +12,7 @@ Environment:
   CONTAINERFILE      Containerfile path. Default: containers/Containerfile
   ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.3
   LLAMA_ROCM_REF     llama.cpp ref for stable ROCm. Default: 95405ac65
+  CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
   DRY_RUN            Print build commands without running them. Default: 0
@@ -33,6 +34,7 @@ IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.3}"
 LLAMA_ROCM_REF="${LLAMA_ROCM_REF:-95405ac65}"
+CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
 TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
 DRY_RUN="${DRY_RUN:-0}"
@@ -106,23 +108,42 @@ build_image() {
   local build_type="$1"
   local rocm_repo_url="https://repo.radeon.com/rocm/rhel10/${ROCM_VERSION}/main"
   local tag_args=()
+  local build_cache_suffix="${build_type}-${CPU_TARGET}"
   local cmd=()
 
   case "$build_type" in
     rocm)
-      tag_args=(-t "$IMAGE_PREFIX:rocm")
-      if [[ "$TAG_VERSION" == "1" ]]; then
-        tag_args+=(-t "$IMAGE_PREFIX:rocm-$ROCM_VERSION")
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocm")
+        if [[ "$TAG_VERSION" == "1" ]]; then
+          tag_args+=(-t "$IMAGE_PREFIX:rocm-$ROCM_VERSION")
+        fi
+      else
+        tag_args+=(-t "$IMAGE_PREFIX:rocm-$CPU_TARGET")
+        if [[ "$TAG_VERSION" == "1" ]]; then
+          tag_args+=(-t "$IMAGE_PREFIX:rocm-$ROCM_VERSION-$CPU_TARGET")
+        fi
       fi
       ;;
     rocm-next)
-      tag_args=(-t "$IMAGE_PREFIX:rocm-next")
-      if [[ "$TAG_NIGHTLY_ALIAS" == "1" ]]; then
-        tag_args+=(-t "$IMAGE_PREFIX:rocm7-nightlies")
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocm-next")
+        if [[ "$TAG_NIGHTLY_ALIAS" == "1" ]]; then
+          tag_args+=(-t "$IMAGE_PREFIX:rocm7-nightlies")
+        fi
+      else
+        tag_args+=(-t "$IMAGE_PREFIX:rocm-next-$CPU_TARGET")
+        if [[ "$TAG_NIGHTLY_ALIAS" == "1" ]]; then
+          tag_args+=(-t "$IMAGE_PREFIX:rocm7-nightlies-$CPU_TARGET")
+        fi
       fi
       ;;
     vulkan)
-      tag_args=(-t "$IMAGE_PREFIX:vulkan")
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:vulkan")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:vulkan-$CPU_TARGET")
+      fi
       ;;
   esac
 
@@ -137,6 +158,9 @@ build_image() {
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
+      --build-arg "CPU_TARGET=$CPU_TARGET" \
+      --cache-from "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
+      --cache-to "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \
       "${BUILD_EXTRA[@]}" \
@@ -150,6 +174,9 @@ build_image() {
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
+      --build-arg "CPU_TARGET=$CPU_TARGET" \
+      --cache-from "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
+      --cache-to "$IMAGE_PREFIX:build-cache-$build_cache_suffix" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \
       "${BUILD_EXTRA[@]}" \
