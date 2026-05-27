@@ -11,6 +11,8 @@ This file tracks the experimental container workflow that should stay separate f
 
 ## References
 
+- [Next-workflow intent and fork delta](docs-next/intent-and-delta.md)
+- [Build workflow](docs-next/build.md)
 - [llama.cpp argument map](docs-next/llama-cpp-args.md)
 - [Podman workflow](docs-next/podman.md)
 
@@ -27,12 +29,12 @@ bin/podman-llama.sh rocm-7.2.3 server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
-Supported backends are `vulkan-radv`, `vulkan-amdvlk`, `rocm-6.4.4`, `rocm-7.2.3`, `rocm7-nightlies`, `vulkan-radv-mtp`, and `rocm-7.2.3-mtp`.
+Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `rocm-7.2.3`, `rocm-7_2_3`, `rocm-next`, and `rocm7-nightlies`.
 
 For MTP builds:
 
 ```bash
-bin/podman-llama.sh vulkan-radv-mtp mtp-server \
+bin/podman-llama.sh vulkan mtp-server \
   /var/mnt/xdata/models/qwen-mtp/model.gguf \
   3
 ```
