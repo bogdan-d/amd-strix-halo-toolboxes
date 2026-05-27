@@ -13,7 +13,7 @@ ARG ROCM_MAJOR_VERSION=7
 ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
 ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
-ARG LLAMA_REPO=https://github.com/ggerganov/llama.cpp.git
+ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
 ARG LLAMA_BRANCH=master
 # Stable ROCm 7.2.3 currently crashes with newer llama.cpp master during HIP
 # stream creation on Strix Halo. Match the upstream toolbox image commit.
