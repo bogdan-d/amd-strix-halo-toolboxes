@@ -5,7 +5,7 @@
 #   bin/build.sh rocm-next
 #   bin/build.sh vulkan
 
-ARG FEDORA_VERSION=43
+ARG FEDORA_VERSION=44
 ARG BUILD_TYPE=rocm
 ARG ROCM_VERSION=7.2.3
 ARG ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main
@@ -109,7 +109,7 @@ RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
   vulkan-loader-devel vulkaninfo mesa-vulkan-drivers \
-  spirv-headers-devel radeontop glslc; \
+  spirv-headers-devel radeontop glslc glslang; \
   fi
 
 # Build-time ROCm/HIP paths are needed for the TheRock nightly tarball target.
@@ -136,6 +136,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 
+# GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
@@ -144,7 +145,11 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     git checkout --detach "${LLAMA_ROCM_REF}"; \
   fi \
   && git submodule update --init --recursive \
-  && patch -p1 < /tmp/llama-grammar.patch
+  && patch -p1 < /tmp/llama-grammar.patch \
+  && sed -i \
+    's@^#define DEFAULT_INTERPOLATION_MODE (GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ANTIALIAS)$@#define DEFAULT_INTERPOLATION_MODE (uint32_t(GGML_SCALE_MODE_BILINEAR) | uint32_t(GGML_SCALE_FLAG_ANTIALIAS))@' \
+    tools/mtmd/clip-graph.h \
+  && grep -q 'uint32_t(GGML_SCALE_MODE_BILINEAR)' tools/mtmd/clip-graph.h
 
 # Backend-specific llama.cpp configuration. Keep the three target blocks close
 # together so it is clear which CMake flags belong to ROCm stable, ROCm next,
@@ -171,6 +176,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=ON \
+    -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
     -DROCM_PATH=/opt/rocm \
@@ -185,6 +191,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=ON \
+    -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
     -DROCM_PATH=/opt/rocm \
@@ -195,8 +202,10 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_VULKAN=ON \
     ${cpu_flags} \
+    -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=ON \
+    -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF; \
   fi \
   && cmake --build "${build_dir}" --config Release \
