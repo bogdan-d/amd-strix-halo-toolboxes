@@ -16,6 +16,9 @@ Environment:
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
   BUILD_CACHE_REPO   Optional remote registry repo prefix for Buildah cache
+  BUILD_LOG_MODE     progress or full. Default: progress
+  BUILD_LOG_DIR      Directory for full build logs. Default: .build-logs
+  BUILD_LOG_TAIL     Full-log lines to print on failure. Default: 160
   DRY_RUN            Print build commands without running them. Default: 0
   BUILD_EXTRA_ARGS   Extra build arguments inserted before the context
 
@@ -38,12 +41,24 @@ LLAMA_ROCM_REF="${LLAMA_ROCM_REF:-95405ac65}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
 TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
+BUILD_LOG_MODE="${BUILD_LOG_MODE:-progress}"
+BUILD_LOG_DIR="${BUILD_LOG_DIR:-.build-logs}"
+BUILD_LOG_TAIL="${BUILD_LOG_TAIL:-160}"
 DRY_RUN="${DRY_RUN:-0}"
 
 case "$BUILDER" in
   buildah|podman) ;;
   *)
     echo "Unsupported BUILDER: $BUILDER" >&2
+    usage
+    exit 1
+    ;;
+esac
+
+case "$BUILD_LOG_MODE" in
+  progress|full) ;;
+  *)
+    echo "Unsupported BUILD_LOG_MODE: $BUILD_LOG_MODE" >&2
     usage
     exit 1
     ;;
@@ -192,8 +207,47 @@ build_image() {
   if [[ "$DRY_RUN" == "1" ]]; then
     printf '  %q' "${cmd[@]}"
     printf '\n'
-  else
+  elif [[ "$BUILD_LOG_MODE" == "full" ]]; then
     "${cmd[@]}"
+  else
+    mkdir -p "$BUILD_LOG_DIR"
+    local started_at
+    local log_file
+    started_at="$(date +%Y%m%d-%H%M%S)"
+    log_file="$BUILD_LOG_DIR/${started_at}-${build_type}-${CPU_TARGET}.log"
+    printf 'Full build log: %s\n' "$log_file"
+
+    set +e
+    "${cmd[@]}" 2>&1 | tee "$log_file" | awk '
+      cmake_warning_context > 0 {
+        print; fflush();
+        cmake_warning_context--;
+        next
+      }
+      /^>>> Already downloaded$/ { next }
+      /^STEP [0-9]+\/[0-9]+:/ { print; fflush(); next }
+      /^>>> / { print; fflush(); next }
+      /^Latest ROCm nightly tarball:/ { print; fflush(); next }
+      /^COMMIT / { print; fflush(); next }
+      /^Successfully tagged / { print; fflush(); next }
+      /^CMake Warning/ { print; fflush(); cmake_warning_context = 8; next }
+      /[Ww]arning:/ { print; fflush(); next }
+      /^Error: / { print; fflush(); next }
+      /^error: / { print; fflush(); next }
+      /^CMake Error/ { print; fflush(); next }
+      /^fatal: / { print; fflush(); next }
+      /FAILED:/ { print; fflush(); next }
+      /^ninja: / { print; fflush(); next }
+      /No such file or directory/ { print; fflush(); next }
+    '
+    local status=${PIPESTATUS[0]}
+    set -e
+
+    if [[ "$status" -ne 0 ]]; then
+      printf 'Build failed for %s. Last %s lines from %s:\n' "$build_type" "$BUILD_LOG_TAIL" "$log_file" >&2
+      tail -n "$BUILD_LOG_TAIL" "$log_file" >&2
+      return "$status"
+    fi
   fi
 }
 

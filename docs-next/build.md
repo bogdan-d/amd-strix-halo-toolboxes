@@ -40,6 +40,15 @@ bin/build.sh rocm
 bin/build.sh rocm=7.2.3
 ```
 
+By default, the script runs in `BUILD_LOG_MODE=progress`: it writes the full
+Buildah/Podman output under `.build-logs/`, while the terminal shows only build
+steps, explicit `>>>` phase markers, commit/tag lines, and common error lines.
+Use full streaming output when you need raw package-manager or compiler logs:
+
+```bash
+BUILD_LOG_MODE=full bin/build.sh rocm
+```
+
 Use Podman instead:
 
 ```bash

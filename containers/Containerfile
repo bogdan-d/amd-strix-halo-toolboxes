@@ -43,6 +43,8 @@ RUN case "${BUILD_TYPE}" in \
 RUN echo 'keepcache=True' >> /etc/dnf/dnf.conf
 
 RUN --mount=type=cache,id=dnf-rocm-base,target=/var/cache/libdnf5 \
+  echo ">>> Installing builder base packages for ${BUILD_TYPE}" \
+  && \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
@@ -65,6 +67,7 @@ RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
 
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  echo ">>> Installing ROCm ${ROCM_VERSION} builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
@@ -80,6 +83,7 @@ WORKDIR /tmp
 RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
   set -euo pipefail; \
+  echo ">>> Resolving latest ROCm nightly tarball"; \
   prefix="therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}"; \
   key="$(curl -fsSL "${ROCM_NIGHTLY_BASE_URL}?list-type=2&prefix=${prefix}" \
   | tr '<' '\n' \
@@ -89,11 +93,13 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   test -n "${key}"; \
   echo "Latest ROCm nightly tarball: ${key}"; \
   if [ ! -f "/var/cache/rocm-nightly/${key}" ]; then \
+  echo ">>> Downloading ROCm nightly tarball"; \
   aria2c -x 16 -s 16 -j 16 --file-allocation=none \
   "${ROCM_NIGHTLY_BASE_URL}/${key}" \
   -d /var/cache/rocm-nightly \
   -o "${key}"; \
   fi; \
+  echo ">>> Extracting ROCm nightly tarball"; \
   mkdir -p /opt/rocm; \
   tar xzf "/var/cache/rocm-nightly/${key}" -C /opt/rocm --strip-components=1; \
   mkdir -p /opt/rocm/amdgcn; \
@@ -105,6 +111,7 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
 # copied for this target; llama.cpp is built with GGML_VULKAN below.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "vulkan" ]; then \
+  echo ">>> Installing Vulkan RADV builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
@@ -132,12 +139,16 @@ ENV ROCM_PATH=/opt/rocm \
 WORKDIR /opt/llama.cpp
 
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  echo ">>> Ensuring llama.cpp source checkout exists" \
+  && \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  echo ">>> Updating llama.cpp source and applying local patch" \
+  && \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
@@ -160,6 +171,8 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 #             building on a runner whose compiler supports those switches
 # native     host-native detection for local experiments only
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  echo ">>> Configuring and building llama.cpp for ${BUILD_TYPE}/${CPU_TARGET}" \
+  && \
   case "${CPU_TARGET}" in \
     generic) cpu_flags="-DGGML_NATIVE=OFF" ;; \
     strix-halo) cpu_flags="-DGGML_NATIVE=OFF -DGGML_AVX=ON -DGGML_AVX2=ON -DGGML_F16C=ON -DGGML_FMA=ON -DGGML_BMI2=ON -DGGML_AVX_VNNI=ON -DGGML_AVX512=ON -DGGML_AVX512_VBMI=ON -DGGML_AVX512_VNNI=ON -DGGML_AVX512_BF16=ON" ;; \
@@ -212,6 +225,8 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   && cmake --install "${build_dir}" --config Release
 
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+  echo ">>> Installing llama.cpp runtime artifacts" \
+  && \
   build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
   && mkdir -p /usr/local/lib64 \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
@@ -221,6 +236,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 # Runtime ROCm payload: official ROCm installs packages in the final stage, so
 # only the nightly tarball target needs a copied /opt/rocm runtime tree.
 RUN if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
+  echo ">>> Trimming ROCm nightly runtime payload"; \
   find /opt/rocm -type f -name '*.a' -delete; \
   rm -rf \
   /opt/rocm/include \
@@ -265,6 +281,8 @@ RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
 RUN echo 'keepcache=True' >> /etc/dnf/dnf.conf
 
 RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
+  echo ">>> Installing runtime base packages for ${BUILD_TYPE}" \
+  && \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   install \
   bash ca-certificates libatomic libstdc++ libgcc libgomp sudo \
@@ -273,6 +291,7 @@ RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
 # ROCm stable runtime: install only the runtime libraries needed by llama.cpp.
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  echo ">>> Installing ROCm ${ROCM_VERSION} runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
@@ -283,6 +302,7 @@ RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
 # is required at run time for this target.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "vulkan" ]; then \
+  echo ">>> Installing Vulkan RADV runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
