@@ -49,10 +49,15 @@ The shared Containerfile currently supports three build types:
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
 
-The stable ROCm target pins llama.cpp to `95405ac65` by default because newer
-llama.cpp master has crashed during HIP stream creation on Strix Halo with ROCm
-7.2.3. The default repository is `ggml-org/llama.cpp`, matching the current
-canonical upstream after the old `ggerganov` path began redirecting.
+All targets follow the same llama.cpp source line by default. The old ROCm-only
+`95405ac65` pin worked around Strix Halo ROCm model-load crashes while the
+runtime environment was still being narrowed down. The recent latest-llama.cpp
+crash reproduced when ROCm/HIP paths were exported process-wide in the runtime
+environment; current images avoid those exports and expose ROCm libraries
+through `ldconfig` instead. Use `LLAMA_REF` only for testing, bisects, or
+deliberately preserved test builds across all backends. The default repository
+is `ggml-org/llama.cpp`, matching the current canonical upstream after the old
+`ggerganov` path began redirecting.
 
 ## Build Workflow
 
@@ -63,8 +68,8 @@ Important behavior added locally:
 
 - target aliases such as `rocm`, `rocm=7.2.3`, `rocm-next`, `rocm7-nightlies`,
   `vulkan`, and `vulkan-radv`;
-- `LLAMA_ROCM_REF` to keep the stable ROCm build pinned while still allowing
-  experiments;
+- `LLAMA_REF` to optionally pin llama.cpp across all backends for tests,
+  bisects, or preserved builds;
 - `CPU_TARGET=generic|strix-halo|native`, with `generic` as the reproducible
   default;
 - non-generic CPU targets write variant tags only, so they do not overwrite the
@@ -91,6 +96,8 @@ Important defaults:
 - `/dev/dri` for Vulkan and `/dev/dri` plus `/dev/kfd` for ROCm;
 - Hugging Face cache mounting through `HF_CACHE_DIR` and `HF_HOME`;
 - automatic `.env` loading for runtime environment variables.
+- `load-test` for bounded model-load smoke tests that start `llama-server`,
+  wait until the model is loaded, and stop the container.
 
 See [podman.md](podman.md) for the complete runtime flow and raw `podman run`
 examples.

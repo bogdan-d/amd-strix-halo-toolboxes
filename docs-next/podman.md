@@ -34,6 +34,17 @@ bin/podman-llama.sh rocm server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
+Check model-load without leaving a server running:
+
+```bash
+bin/podman-llama.sh rocm load-test \
+  /var/mnt/xdata/models/qwen/model.gguf
+```
+
+`load-test` uses the same server defaults, adds `--no-warmup`, disables the
+server UI and prompt cache, waits for the model-loaded log line, then stops the
+container. Increase `LLAMA_LOAD_TEST_TIMEOUT` for large models.
+
 ## Local Builds
 
 Use `bin/build.sh` to build next-workflow images from `containers/Containerfile`.
@@ -165,6 +176,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for `server`, `mtp-server`, and `cli` because those are required for reliable Strix Halo runs. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 32768`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 32768`, and the backend-specific `-ub` value.
 
-The model path passed to `server`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.
+The model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

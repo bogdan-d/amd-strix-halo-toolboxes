@@ -15,9 +15,7 @@ ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
 ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
 ARG LLAMA_BRANCH=master
-# Stable ROCm 7.2.3 currently crashes with newer llama.cpp master during HIP
-# stream creation on Strix Halo. Match the upstream toolbox image commit.
-ARG LLAMA_ROCM_REF=95405ac65
+ARG LLAMA_REF=
 
 # build stage
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
@@ -31,7 +29,7 @@ ARG GFX_TARGET
 ARG CPU_TARGET
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
-ARG LLAMA_ROCM_REF
+ARG LLAMA_REF
 
 RUN case "${BUILD_TYPE}" in \
   rocm|rocm-next|vulkan) ;; \
@@ -152,8 +150,8 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
-  && if [ "${BUILD_TYPE}" = "rocm" ] && [ -n "${LLAMA_ROCM_REF}" ]; then \
-    git checkout --detach "${LLAMA_ROCM_REF}"; \
+  && if [ -n "${LLAMA_REF}" ]; then \
+    git checkout --detach "${LLAMA_REF}"; \
   fi \
   && git submodule update --init --recursive \
   && patch -p1 < /tmp/llama-grammar.patch \

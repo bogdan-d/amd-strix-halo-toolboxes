@@ -67,12 +67,16 @@ Pass advanced build flags with `BUILD_EXTRA_ARGS`:
 BUILD_EXTRA_ARGS="--no-cache" bin/build.sh rocm
 ```
 
-The stable `rocm` target pins llama.cpp to `95405ac65` by default, matching the
-upstream ROCm 7.2.3 toolbox image known to load models on Strix Halo. Override it
-only when testing a newer llama.cpp commit:
+All targets leave `LLAMA_REF` empty by default, so they follow `LLAMA_BRANCH`.
+The old ROCm-only `95405ac65` pin was a workaround while debugging Strix Halo
+ROCm model-load crashes. The recent latest-llama.cpp crash reproduced when
+ROCm/HIP paths were exported process-wide in the runtime environment; current
+images avoid those exports and expose ROCm libraries through `ldconfig` instead.
+Set `LLAMA_REF` only when testing, bisecting, or preserving a known llama.cpp
+build across all backends:
 
 ```bash
-LLAMA_ROCM_REF=master bin/build.sh rocm
+LLAMA_REF=95405ac65 bin/build.sh rocm
 ```
 
 The default CPU target is `generic`, which disables host-native CPU detection so
@@ -112,7 +116,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm \
   --build-arg ROCM_VERSION=7.2.3 \
   --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
-  --build-arg LLAMA_ROCM_REF=95405ac65 \
+  --build-arg LLAMA_REF= \
   --build-arg CPU_TARGET=generic \
   -t localhost/amd-strix-halo-toolboxes:rocm \
   -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
@@ -181,3 +185,13 @@ podman run --rm \
   localhost/amd-strix-halo-toolboxes:vulkan \
   llama-cli --list-devices
 ```
+
+Check model-load without leaving a server running:
+
+```bash
+bin/podman-llama.sh rocm load-test /var/mnt/xdata/models/qwen/model.gguf
+```
+
+`load-test` starts `llama-server` detached, waits for the model-loaded log line,
+prints the last server logs, and stops the container. Use
+`LLAMA_LOAD_TEST_TIMEOUT=180` for very large models.

@@ -29,6 +29,13 @@ bin/podman-llama.sh rocm-7.2.3 server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
+For a bounded model-load smoke test that stops the server automatically:
+
+```bash
+bin/podman-llama.sh rocm-7.2.3 load-test \
+  /var/mnt/xdata/models/qwen/model.gguf
+```
+
 Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `rocm-7.2.3`, `rocm-7_2_3`, `rocm-next`, and `rocm7-nightlies`.
 
 For MTP builds:

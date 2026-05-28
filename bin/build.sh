@@ -11,7 +11,7 @@ Environment:
   IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
   CONTAINERFILE      Containerfile path. Default: containers/Containerfile
   ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.3
-  LLAMA_ROCM_REF     llama.cpp ref for stable ROCm. Default: 95405ac65
+  LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
@@ -40,7 +40,7 @@ BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.3}"
-LLAMA_ROCM_REF="${LLAMA_ROCM_REF:-95405ac65}"
+LLAMA_REF="${LLAMA_REF:-}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
 TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
@@ -183,7 +183,7 @@ build_image() {
       --build-arg "BUILD_TYPE=$build_type" \
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
-      --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
+      --build-arg "LLAMA_REF=$LLAMA_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
@@ -198,7 +198,7 @@ build_image() {
       --build-arg "BUILD_TYPE=$build_type" \
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
-      --build-arg "LLAMA_ROCM_REF=$LLAMA_ROCM_REF" \
+      --build-arg "LLAMA_REF=$LLAMA_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \

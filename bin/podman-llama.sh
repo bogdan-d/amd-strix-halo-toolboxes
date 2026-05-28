@@ -17,6 +17,7 @@ Commands:
   server <model> [...]  Run llama-server with Strix Halo defaults
   mtp-server <model> [draft-n] [...]
                         Run llama-server with draft MTP enabled
+  load-test <model> [...] Start llama-server, wait for model load, then stop
   cli <model> [...]     Run llama-cli with Strix Halo defaults
   bench <model> [...]   Run llama-bench with Strix Halo defaults
   rpc-server [...]      Run rpc-server listening on 0.0.0.0:50052
@@ -36,6 +37,8 @@ Environment:
   LLAMA_NGL             GPU layers to offload. Default: 999
   LLAMA_BENCH_NGL       GPU layers for llama-bench. Default: 99
   LLAMA_PREDICT         Default CLI prediction tokens. Default: -1
+  LLAMA_LOAD_TEST_TIMEOUT
+                        Seconds to wait for load-test. Default: 120
   HF_CACHE_DIR          Host Hugging Face cache directory. Default: ~/.cache/huggingface
   HF_HOME               Container Hugging Face cache directory. Default: /root/.cache/huggingface
   PODMAN_CONTAINER      Existing container name/id to use for shell
@@ -122,6 +125,7 @@ LLAMA_UBATCH="${LLAMA_UBATCH:-$DEFAULT_UBATCH}"
 LLAMA_NGL="${LLAMA_NGL:-999}"
 LLAMA_BENCH_NGL="${LLAMA_BENCH_NGL:-99}"
 LLAMA_PREDICT="${LLAMA_PREDICT:--1}"
+LLAMA_LOAD_TEST_TIMEOUT="${LLAMA_LOAD_TEST_TIMEOUT:-120}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 HF_HOME="${HF_HOME:-/root/.cache/huggingface}"
 PODMAN_NAME_PREFIX="${PODMAN_NAME_PREFIX:-amd-strix-halo-llama}"
@@ -232,6 +236,21 @@ base_run() {
     "$IMAGE" "$@"
 }
 
+base_run_detached() {
+  podman run --rm --detach \
+    --security-opt seccomp=unconfined \
+    --security-opt label=disable \
+    --group-add keep-groups \
+    --ipc=host \
+    "${DEVICE_ARGS[@]}" \
+    "${VOLUME_ARGS[@]}" \
+    "${CACHE_ARGS[@]}" \
+    "${ENV_ARGS[@]}" \
+    "${EXTRA_ARGS[@]}" \
+    "${PODMAN_RUN_ARGS[@]}" \
+    "$IMAGE" "$@"
+}
+
 require_model() {
   if [[ $# -lt 1 ]]; then
     echo "Missing model path." >&2
@@ -294,6 +313,51 @@ case "$ACTION" in
       --spec-draft-n-max "$DRAFT_N" \
       -np 1 \
       "$@"
+    ;;
+  load-test)
+    require_model "$@"
+    MODEL="$(container_model_path "$1")"
+    shift
+    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
+    CONTAINER_ID="$(base_run_detached llama-server \
+      -m "$MODEL" \
+      --host 127.0.0.1 \
+      --port "$LLAMA_PORT" \
+      -c "$LLAMA_CONTEXT" \
+      -b "$LLAMA_BATCH" \
+      -ub "$LLAMA_UBATCH" \
+      -ngl "$LLAMA_NGL" \
+      -fa 1 \
+      --no-mmap \
+      --no-warmup \
+      --cache-ram 0 \
+      --no-ui \
+      "$@")"
+    cleanup_load_test() {
+      podman stop "$CONTAINER_ID" >/dev/null 2>&1 || true
+    }
+    trap cleanup_load_test EXIT
+    deadline=$((SECONDS + LLAMA_LOAD_TEST_TIMEOUT))
+    while (( SECONDS < deadline )); do
+      if ! podman container exists "$CONTAINER_ID"; then
+        echo "load-test container exited before model load" >&2
+        exit 1
+      fi
+      if [[ "$(podman inspect -f '{{.State.Running}}' "$CONTAINER_ID" 2>/dev/null || true)" != "true" ]]; then
+        podman logs "$CONTAINER_ID" >&2 || true
+        echo "load-test container stopped before model load" >&2
+        exit 1
+      fi
+      if podman logs "$CONTAINER_ID" 2>&1 | grep -q 'model loaded'; then
+        podman logs "$CONTAINER_ID" 2>&1 | tail -n 40
+        echo "load-test passed: model loaded"
+        exit 0
+      fi
+      sleep 1
+    done
+    podman logs "$CONTAINER_ID" >&2 || true
+    echo "load-test timed out after ${LLAMA_LOAD_TEST_TIMEOUT}s" >&2
+    exit 124
     ;;
   cli)
     require_model "$@"
