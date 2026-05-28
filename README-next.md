@@ -24,16 +24,16 @@ If you prefer plain Podman containers, use the helper script instead of creating
 ```bash
 export MODELS_DIR=/var/mnt/xdata/models
 
-bin/podman-llama.sh rocm-7.2.3 list-devices
+bin/run.sh rocm-7.2.3 list-devices
 
-bin/podman-llama.sh rocm-7.2.3 server \
+bin/run.sh rocm-7.2.3 server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 For a bounded model-load smoke test that stops the server automatically:
 
 ```bash
-bin/podman-llama.sh rocm-7.2.3 load-test \
+bin/run.sh rocm-7.2.3 load-test \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
@@ -42,7 +42,7 @@ Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `roc
 For MTP builds:
 
 ```bash
-bin/podman-llama.sh vulkan mtp-server \
+bin/run.sh vulkan mtp-server \
   /var/mnt/xdata/models/qwen-mtp/model.gguf \
   3
 ```

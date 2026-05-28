@@ -30,7 +30,7 @@ The local branch adds the next-workflow surface:
 - `containers/Containerfile` as the shared Fedora-based build for ROCm and
   Vulkan images;
 - `bin/build.sh` for Buildah/Podman image builds;
-- `bin/podman-llama.sh` for running llama.cpp containers with Strix Halo
+- `bin/run.sh` for running llama.cpp containers with Strix Halo
   defaults;
 - `bin/clear.sh` for clearing local next-workflow images, containers, builder
   cache, and build logs;
@@ -84,7 +84,7 @@ See [build.md](build.md) for commands and smoke tests.
 
 ## Runtime Workflow
 
-`bin/podman-llama.sh` is the primary runtime helper. It maps local backend names
+`bin/run.sh` is the primary runtime helper. It maps local backend names
 to image tags, mounts the model directory, exposes the server port, and applies
 Strix Halo llama.cpp defaults.
 

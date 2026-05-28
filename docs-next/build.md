@@ -205,7 +205,7 @@ podman run --rm \
 Check model-load without leaving a server running:
 
 ```bash
-bin/podman-llama.sh rocm load-test /var/mnt/xdata/models/qwen/model.gguf
+bin/run.sh rocm load-test /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 `load-test` starts `llama-server` detached, waits for the model-loaded log line,

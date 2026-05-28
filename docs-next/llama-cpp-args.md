@@ -10,8 +10,8 @@ on 2026-05-24:
 Always verify against the exact binary you are running:
 
 ```bash
-bin/podman-llama.sh rocm run llama-cli --help
-bin/podman-llama.sh rocm run llama-server --help
+bin/run.sh rocm run llama-cli --help
+bin/run.sh rocm run llama-server --help
 ```
 
 ## Strix Halo Baseline

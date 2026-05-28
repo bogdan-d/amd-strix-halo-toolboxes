@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/podman-llama.sh <backend> <command> [args...]
+  bin/run.sh <backend> <command> [args...]
 
 Backends:
   rocm       Stable ROCm image
@@ -45,9 +45,9 @@ Environment:
   PODMAN_EXTRA_ARGS     Extra arguments inserted before the image name
 
 Examples:
-  bin/podman-llama.sh rocm list-devices
-  bin/podman-llama.sh vulkan server ~/models/model.gguf
-  bin/podman-llama.sh rocm-next cli ~/models/model.gguf -p "Hello"
+  bin/run.sh rocm list-devices
+  bin/run.sh vulkan server ~/models/model.gguf
+  bin/run.sh rocm-next cli ~/models/model.gguf -p "Hello"
 EOF
 }
 

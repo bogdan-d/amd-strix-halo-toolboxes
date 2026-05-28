@@ -23,21 +23,21 @@ export MODELS_DIR=/var/mnt/xdata/models
 Check GPU visibility:
 
 ```bash
-bin/podman-llama.sh rocm list-devices
-bin/podman-llama.sh vulkan list-devices
+bin/run.sh rocm list-devices
+bin/run.sh vulkan list-devices
 ```
 
 Start `llama-server`:
 
 ```bash
-bin/podman-llama.sh rocm server \
+bin/run.sh rocm server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 Check model-load without leaving a server running:
 
 ```bash
-bin/podman-llama.sh rocm load-test \
+bin/run.sh rocm load-test \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
@@ -53,7 +53,7 @@ See [build.md](build.md) for build targets and smoke tests.
 Start `llama-server` with draft MTP enabled:
 
 ```bash
-bin/podman-llama.sh rocm mtp-server \
+bin/run.sh rocm mtp-server \
   /var/mnt/xdata/models/qwen-mtp/model.gguf \
   3
 ```
@@ -63,14 +63,14 @@ The `3` means `--spec-draft-n-max 3`. Use `2` for MTP-2.
 The server listens on port `8080` by default. Override it with:
 
 ```bash
-LLAMA_PORT=8081 bin/podman-llama.sh vulkan server \
+LLAMA_PORT=8081 bin/run.sh vulkan server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 Run `llama-cli`:
 
 ```bash
-bin/podman-llama.sh rocm cli \
+bin/run.sh rocm cli \
   /var/mnt/xdata/models/qwen/model.gguf \
   -p "Write a Strix Halo toolkit haiku."
 ```
@@ -78,7 +78,7 @@ bin/podman-llama.sh rocm cli \
 Run `llama-bench`:
 
 ```bash
-bin/podman-llama.sh vulkan bench \
+bin/run.sh vulkan bench \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
@@ -100,14 +100,14 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 Override these with environment variables:
 
 ```bash
-LLAMA_CONTEXT=65536 LLAMA_UBATCH=512 bin/podman-llama.sh vulkan server \
+LLAMA_CONTEXT=65536 LLAMA_UBATCH=512 bin/run.sh vulkan server \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
 Or pass llama.cpp flags at the end; trailing flags are preserved:
 
 ```bash
-bin/podman-llama.sh rocm server \
+bin/run.sh rocm server \
   /var/mnt/xdata/models/qwen/model.gguf \
   -c 8192 -ub 1024
 ```
