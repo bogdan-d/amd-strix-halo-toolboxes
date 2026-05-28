@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [all|rocm[=VERSION]|rocm-next|vulkan]...
+  bin/build.sh [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -21,6 +21,8 @@ Environment:
   BUILD_LOG_TAIL     Full-log lines to print on failure. Default: 160
   DRY_RUN            Print build commands without running them. Default: 0
   BUILD_EXTRA_ARGS   Extra build arguments inserted before the context
+  ROCWMMA_FATTN      Enable rocWMMA flash-attention kernels for ROCm builds.
+                     Default: 0
 
 Examples:
   bin/build.sh
@@ -28,6 +30,7 @@ Examples:
   bin/build.sh rocm=7.2.3
   bin/build.sh rocm-next
   bin/build.sh vulkan
+  bin/build.sh --with-rocwmma rocm rocm-next
   BUILDER=podman bin/build.sh all
 EOF
 }
@@ -48,6 +51,7 @@ BUILD_LOG_MODE="${BUILD_LOG_MODE:-progress}"
 BUILD_LOG_DIR="${BUILD_LOG_DIR:-.build-logs}"
 BUILD_LOG_TAIL="${BUILD_LOG_TAIL:-160}"
 DRY_RUN="${DRY_RUN:-0}"
+ROCWMMA_FATTN="${ROCWMMA_FATTN:-0}"
 
 case "$BUILDER" in
   buildah|podman) ;;
@@ -77,6 +81,9 @@ for target in "$@"; do
     -h|--help)
       usage
       exit 0
+      ;;
+    --with-rocwmma)
+      ROCWMMA_FATTN=1
       ;;
     all)
       TARGETS+=(rocm rocm-next vulkan)
@@ -110,11 +117,24 @@ for target in "$@"; do
   esac
 done
 
+if [[ ${#TARGETS[@]} -eq 0 ]]; then
+  TARGETS+=(rocm rocm-next vulkan)
+fi
+
 if [[ ! "$ROCM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "ROCM_VERSION must be major.minor.patch, got: $ROCM_VERSION" >&2
   usage
   exit 1
 fi
+
+case "$ROCWMMA_FATTN" in
+  0|1) ;;
+  *)
+    echo "ROCWMMA_FATTN must be 0 or 1, got: $ROCWMMA_FATTN" >&2
+    usage
+    exit 1
+    ;;
+esac
 
 BUILD_EXTRA=()
 if [[ -n "${BUILD_EXTRA_ARGS:-}" ]]; then
@@ -185,6 +205,7 @@ build_image() {
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_REF=$LLAMA_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
+      --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \
@@ -200,6 +221,7 @@ build_image() {
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
       --build-arg "LLAMA_REF=$LLAMA_REF" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
+      --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$CONTAINERFILE" \

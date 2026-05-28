@@ -67,6 +67,17 @@ Pass advanced build flags with `BUILD_EXTRA_ARGS`:
 BUILD_EXTRA_ARGS="--no-cache" bin/build.sh rocm
 ```
 
+Enable llama.cpp's rocWMMA flash-attention kernels for ROCm builds:
+
+```bash
+bin/build.sh --with-rocwmma rocm rocm-next
+ROCWMMA_FATTN=1 bin/build.sh rocm
+```
+
+This passes `-DGGML_HIP_ROCWMMA_FATTN=ON` to the `rocm` and `rocm-next`
+CMake builds only. Stable ROCm builds also install `rocwmma-devel` in the
+builder stage when enabled. Vulkan builds ignore this option.
+
 All targets leave `LLAMA_REF` empty by default, so they follow `LLAMA_BRANCH`.
 The old ROCm-only `95405ac65` pin was a workaround while debugging Strix Halo
 ROCm model-load crashes. The recent latest-llama.cpp crash reproduced when
@@ -118,6 +129,7 @@ buildah bud --pull --format oci --layers \
   --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
   --build-arg LLAMA_REF= \
   --build-arg CPU_TARGET=generic \
+  --build-arg ROCWMMA_FATTN=0 \
   -t localhost/amd-strix-halo-toolboxes:rocm \
   -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
   -f containers/Containerfile .

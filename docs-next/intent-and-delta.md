@@ -72,6 +72,8 @@ Important behavior added locally:
   bisects, or preserved builds;
 - `CPU_TARGET=generic|strix-halo|native`, with `generic` as the reproducible
   default;
+- `ROCWMMA_FATTN=1` or `bin/build.sh --with-rocwmma` to opt ROCm builds into
+  llama.cpp's rocWMMA flash-attention kernels;
 - non-generic CPU targets write variant tags only, so they do not overwrite the
   default image tags;
 - `BUILD_CACHE_REPO` support for remote Buildah cache repositories;

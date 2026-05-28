@@ -13,6 +13,7 @@ ARG ROCM_MAJOR_VERSION=7
 ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
 ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
+ARG ROCWMMA_FATTN=0
 ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
 ARG LLAMA_BRANCH=master
 ARG LLAMA_REF=
@@ -27,6 +28,7 @@ ARG ROCM_MAJOR_VERSION
 ARG ROCM_NIGHTLY_BASE_URL
 ARG GFX_TARGET
 ARG CPU_TARGET
+ARG ROCWMMA_FATTN
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
 ARG LLAMA_REF
@@ -34,6 +36,11 @@ ARG LLAMA_REF
 RUN case "${BUILD_TYPE}" in \
   rocm|rocm-next|vulkan) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
+  esac
+
+RUN case "${ROCWMMA_FATTN}" in \
+  0|1) ;; \
+  *) echo "Unsupported ROCWMMA_FATTN: ${ROCWMMA_FATTN}" >&2; exit 1 ;; \
   esac
 
 # Keep downloaded RPMs in the Buildah cache mount. The cache is not committed
@@ -66,12 +73,16 @@ RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
 RUN --mount=type=cache,id=dnf-rocm-723,target=/var/cache/libdnf5 \
   if [ "${BUILD_TYPE}" = "rocm" ]; then \
   echo ">>> Installing ROCm ${ROCM_VERSION} builder packages"; \
+  rocwmma_packages=""; \
+  if [ "${ROCWMMA_FATTN}" = "1" ]; then \
+  rocwmma_packages="rocwmma-devel"; \
+  fi; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
   rocm-llvm rocm-device-libs hip-runtime-amd hip-devel \
   rocblas rocblas-devel hipblas hipblas-devel rocm-cmake libomp-devel libomp \
-  rocminfo radeontop; \
+  rocminfo radeontop ${rocwmma_packages}; \
   fi
 
 # ROCm nightlies: TheRock publishes a self-contained tarball per GPU target.
@@ -177,12 +188,17 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     native) cpu_flags="-DGGML_NATIVE=ON" ;; \
     *) echo "Unsupported CPU_TARGET: ${CPU_TARGET}" >&2; exit 1 ;; \
   esac \
+  && rocwmma_flags="" \
+  && if [ "${ROCWMMA_FATTN}" = "1" ] && [ "${BUILD_TYPE}" != "vulkan" ]; then \
+  rocwmma_flags="-DGGML_HIP_ROCWMMA_FATTN=ON"; \
+  fi \
   && build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
   && rm -rf "${build_dir}" \
   && if [ "${BUILD_TYPE}" = "rocm" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
     ${cpu_flags} \
+    ${rocwmma_flags} \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -198,6 +214,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
     ${cpu_flags} \
+    ${rocwmma_flags} \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
