@@ -27,11 +27,36 @@ bin/run.sh rocm list-devices
 bin/run.sh vulkan list-devices
 ```
 
-Start `llama-server`:
+List the configured model IDs:
 
 ```bash
-bin/run.sh rocm server \
-  /var/mnt/xdata/models/qwen/model.gguf
+bin/run.sh rocm models
+```
+
+Start `llama-server` with the active model preset:
+
+```bash
+bin/run.sh rocm server
+```
+
+The default preset is `models/models.ini`, mounted into the container as
+`/root/models/models.ini` and passed to llama.cpp as `--models-preset`.
+Clients select models by provider-qualified preset name:
+
+```bash
+curl http://127.0.0.1:8080/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL",
+    "messages": [{"role": "user", "content": "Write a short Rust CLI plan."}]
+  }'
+```
+
+Use `LLAMA_MODELS_PRESET` to point at another preset under `MODELS_DIR`:
+
+```bash
+LLAMA_MODELS_PRESET=/var/mnt/xdata/models/models-sample-2.ini \
+  bin/run.sh rocm server
 ```
 
 Check model-load without leaving a server running:
@@ -44,6 +69,13 @@ bin/run.sh rocm load-test \
 `load-test` uses the same server defaults, adds `--no-warmup`, disables the
 server UI and prompt cache, waits for the model-loaded log line, then stops the
 container. Increase `LLAMA_LOAD_TEST_TIMEOUT` for large models.
+
+Direct model paths are still supported for one-off runs:
+
+```bash
+bin/run.sh rocm server \
+  /var/mnt/xdata/models/qwen/model.gguf
+```
 
 ## Local Builds
 
@@ -63,8 +95,7 @@ The `3` means `--spec-draft-n-max 3`. Use `2` for MTP-2.
 The server listens on port `8080` by default. Override it with:
 
 ```bash
-LLAMA_PORT=8081 bin/run.sh vulkan server \
-  /var/mnt/xdata/models/qwen/model.gguf
+LLAMA_PORT=8081 bin/run.sh vulkan server
 ```
 
 Run `llama-cli`:
@@ -128,8 +159,8 @@ podman run --rm -it \
   -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:vulkan \
-  llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
-    -c 131072 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap
+  llama-server --models-preset /root/models/models.ini --models-max 1 \
+    --host 0.0.0.0 --port 8080
 ```
 
 ROCm:
@@ -145,8 +176,8 @@ podman run --rm -it \
   -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:rocm \
-  llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
-    -c 131072 -b 2048 -ub 2048 -ngl 999 -fa 1 --no-mmap
+  llama-server --models-preset /root/models/models.ini --models-max 1 \
+    --host 0.0.0.0 --port 8080
 ```
 
 Use the image tags in the backend table to switch between setups.
@@ -175,6 +206,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from `models/models.ini`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
-The model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.
+The preset passed to `server` and the model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

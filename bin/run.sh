@@ -14,7 +14,8 @@ Backends:
 Commands:
   shell                 Open a shell in a running selected image, or start one
   list-devices          Run llama-cli --list-devices
-  server <model> [...]  Run llama-server with Strix Halo defaults
+  models                List model IDs from LLAMA_MODELS_PRESET
+  server [model] [...]  Run llama-server with models.ini, or one direct model
   mtp-server <model> [draft-n] [...]
                         Run llama-server with draft MTP enabled
   load-test <model> [...] Start llama-server, wait for model load, then stop
@@ -28,6 +29,8 @@ Environment:
   IMAGE_PREFIX          Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
   MODELS_DIR            Host model directory to mount. Default: ~/models
   CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
+  LLAMA_MODELS_PRESET   Host models preset file. Default: $MODELS_DIR/models.ini
+  LLAMA_MODELS_MAX      Maximum models loaded by preset server. Default: 1
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
   LLAMA_BATCH           Default logical batch size. Default: 2048
@@ -46,6 +49,8 @@ Environment:
 
 Examples:
   bin/run.sh rocm list-devices
+  bin/run.sh rocm models
+  bin/run.sh vulkan server
   bin/run.sh vulkan server ~/models/model.gguf
   bin/run.sh rocm-next cli ~/models/model.gguf -p "Hello"
 EOF
@@ -114,6 +119,8 @@ esac
 
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
+LLAMA_MODELS_PRESET="${LLAMA_MODELS_PRESET:-$MODELS_DIR/models.ini}"
+LLAMA_MODELS_MAX="${LLAMA_MODELS_MAX:-1}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 LLAMA_CONTEXT="${LLAMA_CONTEXT:-131072}"
 LLAMA_BATCH="${LLAMA_BATCH:-2048}"
@@ -174,6 +181,36 @@ container_model_path() {
     *)
       echo "Model must live under MODELS_DIR: $MODELS_DIR" >&2
       echo "Set MODELS_DIR=/path/to/models or move the model under that directory." >&2
+      exit 1
+      ;;
+  esac
+}
+
+container_models_preset_path() {
+  local preset="$1"
+  local preset_abs
+  preset_abs="$(realpath -m "$preset")"
+  local models_abs
+  models_abs="$(realpath -m "$MODELS_DIR")"
+
+  if [[ ! -d "$MODELS_DIR" ]]; then
+    echo "MODELS_DIR does not exist: $MODELS_DIR" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "$preset_abs" ]]; then
+    echo "Models preset does not exist: $preset_abs" >&2
+    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or create $MODELS_DIR/models.ini." >&2
+    exit 1
+  fi
+
+  case "$preset_abs" in
+    "$models_abs"/*)
+      printf '%s/%s\n' "$CONTAINER_MODELS_DIR" "${preset_abs#"$models_abs"/}"
+      ;;
+    *)
+      echo "Models preset must live under MODELS_DIR: $MODELS_DIR" >&2
+      echo "Set MODELS_DIR=/path/to/models or move the preset under that directory." >&2
       exit 1
       ;;
   esac
@@ -255,6 +292,24 @@ require_model() {
   fi
 }
 
+list_models_preset() {
+  local preset_abs line section
+  preset_abs="$(realpath -m "$LLAMA_MODELS_PRESET")"
+
+  if [[ ! -f "$preset_abs" ]]; then
+    echo "Models preset does not exist: $preset_abs" >&2
+    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or create $MODELS_DIR/models.ini." >&2
+    exit 1
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ "$line" =~ ^[[:space:]]*\[([^]]+)\][[:space:]]*$ ]] || continue
+    section="${BASH_REMATCH[1]}"
+    [[ "$section" == "*" ]] && continue
+    printf '%s\n' "$section"
+  done < "$preset_abs"
+}
+
 case "$ACTION" in
   shell)
     if CONTAINER_ID="$(running_container_id)"; then
@@ -266,12 +321,26 @@ case "$ACTION" in
   list-devices)
     base_run llama-cli --list-devices
     ;;
+  models)
+    list_models_preset
+    ;;
   server)
-    require_model "$@"
-    MODEL="$(container_model_path "$1")"
-    shift
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
+
+    if [[ $# -eq 0 || "$1" == -* ]]; then
+      MODELS_PRESET="$(container_models_preset_path "$LLAMA_MODELS_PRESET")"
+      base_run llama-server \
+        --models-preset "$MODELS_PRESET" \
+        --models-max "$LLAMA_MODELS_MAX" \
+        --host 0.0.0.0 \
+        --port "$LLAMA_PORT" \
+        "$@"
+      exit 0
+    fi
+
+    MODEL="$(container_model_path "$1")"
+    shift
     base_run llama-server \
       -m "$MODEL" \
       --host 0.0.0.0 \

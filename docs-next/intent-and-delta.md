@@ -85,13 +85,17 @@ See [build.md](build.md) for commands and smoke tests.
 ## Runtime Workflow
 
 `bin/run.sh` is the primary runtime helper. It maps local backend names
-to image tags, mounts the model directory, exposes the server port, and applies
-Strix Halo llama.cpp defaults.
+to image tags, mounts the model directory, exposes the server port, starts
+`llama-server` from `models/models.ini` by default, and keeps direct model paths
+available for one-off runs.
 
 Important defaults:
 
-- `-fa 1` for server, MTP server, CLI, and bench;
-- `--no-mmap` for server, MTP server, and CLI;
+- `models/models.ini` as the default llama.cpp `--models-preset`;
+- provider-qualified model IDs for preset routing;
+- Qwen3.6 coding-agent sampling defaults in the active preset;
+- `-fa 1` for direct server, MTP server, CLI, and bench;
+- `--no-mmap` for direct server, MTP server, and CLI;
 - full GPU offload by default for server/CLI;
 - `131072` context and `2048` batch as the baseline;
 - backend-specific microbatch defaults: `512` for Vulkan and `2048` for ROCm;

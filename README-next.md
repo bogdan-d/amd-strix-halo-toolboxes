@@ -26,9 +26,13 @@ export MODELS_DIR=/var/mnt/xdata/models
 
 bin/run.sh rocm-7.2.3 list-devices
 
-bin/run.sh rocm-7.2.3 server \
-  /var/mnt/xdata/models/qwen/model.gguf
+bin/run.sh rocm-7.2.3 models
+
+bin/run.sh rocm-7.2.3 server
 ```
+
+By default, `server` loads `models/models.ini` through llama.cpp
+`--models-preset`. Clients select a model by its provider-qualified preset name.
 
 For a bounded model-load smoke test that stops the server automatically:
 
@@ -47,6 +51,9 @@ bin/run.sh vulkan mtp-server \
   3
 ```
 
-The helper applies the benchmark defaults for Strix Halo: `-fa 1`, `--no-mmap`, full GPU offload, 32k context, and backend-specific `-ub` values (`512` for Vulkan, `2048` for ROCm).
+The helper applies the benchmark defaults for Strix Halo to direct model runs.
+Preset runs take those defaults from `models/models.ini`: Flash Attention,
+`mmap` off, full GPU offload, 131k context, and Qwen3.6 coding-agent sampling
+defaults.
 
 See [docs-next/podman.md](docs-next/podman.md) for the full Podman workflow and raw `podman run` examples.
