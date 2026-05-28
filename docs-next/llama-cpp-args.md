@@ -317,6 +317,7 @@ These affect token choice after the model has produced logits.
 For this repo, the important split is:
 
 - MTP: `--spec-type draft-mtp --spec-draft-n-max N`
+- MTP plus n-gram map: `--spec-type draft-mtp --spec-draft-n-max N --spec-type ngram-map-k4v --spec-ngram-map-k4v-size-n 16 --spec-ngram-map-k4v-size-m 24 --spec-ngram-map-k4v-min-hits 2`
 - Draft model: `--spec-type draft-simple --model-draft path`
 - N-gram: `--spec-type ngram-*`
 
@@ -434,6 +435,10 @@ llama-server \
   --no-mmap \
   --spec-type draft-mtp \
   --spec-draft-n-max 3 \
+  --spec-type ngram-map-k4v \
+  --spec-ngram-map-k4v-size-n 16 \
+  --spec-ngram-map-k4v-size-m 24 \
+  --spec-ngram-map-k4v-min-hits 2 \
   -np 1
 ```
 

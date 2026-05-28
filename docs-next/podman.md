@@ -165,7 +165,12 @@ podman run --rm -it \
   localhost/amd-strix-halo-toolboxes:vulkan \
   llama-server -m /root/models/qwen-mtp/model.gguf --host 0.0.0.0 --port 8080 \
     -c 32768 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap \
-    --spec-type draft-mtp --spec-draft-n-max 3 -np 1
+    --spec-type draft-mtp --spec-draft-n-max 3 \
+    --spec-type ngram-map-k4v \
+    --spec-ngram-map-k4v-size-n 16 \
+    --spec-ngram-map-k4v-size-m 24 \
+    --spec-ngram-map-k4v-min-hits 2 \
+    -np 1
 ```
 
 ## Notes

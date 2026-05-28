@@ -307,6 +307,10 @@ case "$ACTION" in
       --no-mmap \
       --spec-type draft-mtp \
       --spec-draft-n-max "$DRAFT_N" \
+      --spec-type ngram-map-k4v \
+      --spec-ngram-map-k4v-size-n 16 \
+      --spec-ngram-map-k4v-size-m 24 \
+      --spec-ngram-map-k4v-min-hits 2 \
       -np 1 \
       "$@"
     ;;
