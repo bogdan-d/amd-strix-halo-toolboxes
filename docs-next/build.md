@@ -158,7 +158,9 @@ The Containerfile uses Buildah cache mounts for DNF packages, ROCm nightly
 tarballs, and the shared llama.cpp checkout. It builds only the runtime targets
 used by the next workflow: `llama-server`, `llama-cli`, `llama-bench`, and
 `llama-gguf-split`. It also copies the shared patch and helper assets from
-`toolboxes/`.
+`toolboxes/`. Each build resets the cached llama.cpp worktree before switching
+refs and applying local patches, so dirty source files left by one backend do
+not break the next backend build.
 
 ## Smoke Tests
 

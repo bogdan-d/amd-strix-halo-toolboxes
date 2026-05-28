@@ -158,6 +158,8 @@ COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   echo ">>> Updating llama.cpp source and applying local patch" \
   && \
+  git reset --hard \
+  && \
   git fetch origin "${LLAMA_BRANCH}" \
   && git checkout -B "${LLAMA_BRANCH}" "origin/${LLAMA_BRANCH}" \
   && git reset --hard "origin/${LLAMA_BRANCH}" \
