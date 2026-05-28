@@ -112,12 +112,6 @@ bin/podman-llama.sh rocm server \
   -c 8192 -ub 1024
 ```
 
-Run an RPC worker:
-
-```bash
-bin/podman-llama.sh rocm rpc-server
-```
-
 ## Raw Podman Commands
 
 The helper expands to commands like these.

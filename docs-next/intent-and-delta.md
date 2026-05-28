@@ -83,7 +83,7 @@ See [build.md](build.md) for commands and smoke tests.
 ## Runtime Workflow
 
 `bin/podman-llama.sh` is the primary runtime helper. It maps local backend names
-to image tags, mounts the model directory, exposes server/RPC ports, and applies
+to image tags, mounts the model directory, exposes the server port, and applies
 Strix Halo llama.cpp defaults.
 
 Important defaults:

@@ -143,17 +143,19 @@ buildah bud --pull --format oci --layers \
 ```
 
 The Containerfile uses Buildah cache mounts for DNF packages, ROCm nightly
-tarballs, and the shared llama.cpp checkout. It also copies the shared patch and
-helper assets from `toolboxes/`.
+tarballs, and the shared llama.cpp checkout. It builds only the runtime targets
+used by the next workflow: `llama-server`, `llama-cli`, `llama-bench`, and
+`llama-gguf-split`. It also copies the shared patch and helper assets from
+`toolboxes/`.
 
 ## Smoke Tests
 
 Check the built binaries:
 
 ```bash
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm llama version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next llama version
-podman run --rm localhost/amd-strix-halo-toolboxes:vulkan llama version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm llama-server --version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next llama-server --version
+podman run --rm localhost/amd-strix-halo-toolboxes:vulkan llama-server --version
 ```
 
 Check GPU visibility:

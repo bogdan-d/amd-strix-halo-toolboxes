@@ -14,6 +14,7 @@ This file tracks the experimental container workflow that should stay separate f
 - [Next-workflow intent and fork delta](docs-next/intent-and-delta.md)
 - [Build workflow](docs-next/build.md)
 - [llama.cpp argument map](docs-next/llama-cpp-args.md)
+- [llama.cpp target reference](docs-next/llama-cpp-targets.md)
 - [Podman workflow](docs-next/podman.md)
 
 ## Podman without Toolbx or Distrobox

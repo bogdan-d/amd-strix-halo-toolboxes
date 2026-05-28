@@ -186,7 +186,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_RPC=ON \
+    -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
@@ -201,7 +201,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
     -DAMDGPU_TARGETS="${GFX_TARGET}" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_RPC=ON \
+    -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
@@ -215,20 +215,25 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     ${cpu_flags} \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DGGML_RPC=ON \
+    -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
     -DLLAMA_BUILD_TESTS=OFF; \
   fi \
   && cmake --build "${build_dir}" --config Release \
-  && cmake --install "${build_dir}" --config Release
+    --target llama-server llama-cli llama-bench llama-gguf-split
 
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   echo ">>> Installing llama.cpp runtime artifacts" \
   && \
   build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
-  && mkdir -p /usr/local/lib64 \
+  && mkdir -p /usr/local/bin /usr/local/lib64 \
+  && install -m 0755 \
+    "/opt/llama.cpp/${build_dir}/bin/llama-server" \
+    "/opt/llama.cpp/${build_dir}/bin/llama-cli" \
+    "/opt/llama.cpp/${build_dir}/bin/llama-bench" \
+    "/opt/llama.cpp/${build_dir}/bin/llama-gguf-split" \
+    /usr/local/bin/ \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
-  && cp "/opt/llama.cpp/${build_dir}"/bin/rpc-* /usr/local/bin/ \
   && ldconfig
 
 # Runtime ROCm payload: official ROCm installs packages in the final stage, so

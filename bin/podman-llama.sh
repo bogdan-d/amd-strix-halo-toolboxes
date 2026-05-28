@@ -20,7 +20,6 @@ Commands:
   load-test <model> [...] Start llama-server, wait for model load, then stop
   cli <model> [...]     Run llama-cli with Strix Halo defaults
   bench <model> [...]   Run llama-bench with Strix Halo defaults
-  rpc-server [...]      Run rpc-server listening on 0.0.0.0:50052
   run <cmd> [...]       Run an arbitrary command in the selected image
   pull                  Pull the selected image
 
@@ -30,7 +29,6 @@ Environment:
   MODELS_DIR            Host model directory to mount. Default: ~/models
   CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
   LLAMA_PORT            Host/container server port. Default: 8080
-  RPC_PORT              Host/container RPC port. Default: 50052
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 32768
   LLAMA_BATCH           Default logical batch size. Default: 2048
   LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048
@@ -42,7 +40,7 @@ Environment:
   HF_CACHE_DIR          Host Hugging Face cache directory. Default: ~/.cache/huggingface
   HF_HOME               Container Hugging Face cache directory. Default: /root/.cache/huggingface
   PODMAN_CONTAINER      Existing container name/id to use for shell
-  PODMAN_NAME           Container name for new shell/server/rpc-server containers
+  PODMAN_NAME           Container name for new shell/server containers
   PODMAN_NAME_PREFIX    Container name prefix. Default: amd-strix-halo-llama
   PODMAN_EXTRA_ARGS     Extra arguments inserted before the image name
 
@@ -50,7 +48,6 @@ Examples:
   bin/podman-llama.sh rocm list-devices
   bin/podman-llama.sh vulkan server ~/models/model.gguf
   bin/podman-llama.sh rocm-next cli ~/models/model.gguf -p "Hello"
-  bin/podman-llama.sh rocm rpc-server
 EOF
 }
 
@@ -118,7 +115,6 @@ esac
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
-RPC_PORT="${RPC_PORT:-50052}"
 LLAMA_CONTEXT="${LLAMA_CONTEXT:-32768}"
 LLAMA_BATCH="${LLAMA_BATCH:-2048}"
 LLAMA_UBATCH="${LLAMA_UBATCH:-$DEFAULT_UBATCH}"
@@ -387,15 +383,6 @@ case "$ACTION" in
       -n 32 \
       -d "$LLAMA_CONTEXT" \
       -ub "$LLAMA_UBATCH" \
-      "$@"
-    ;;
-  rpc-server)
-    mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
-    PODMAN_RUN_ARGS+=(-p "$RPC_PORT:$RPC_PORT")
-    base_run rpc-server \
-      -H 0.0.0.0 \
-      -p "$RPC_PORT" \
-      -c \
       "$@"
     ;;
   run)
