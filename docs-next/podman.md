@@ -91,7 +91,7 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `-fa 1` | enabled | Required for reliable Strix Halo runs and used in all local benchmarks. |
 | `--no-mmap` | enabled for server/CLI | Avoids mmap-related memory fragmentation and crashes. |
 | `-ngl` | `999` for server/CLI, `99` for bench | Full GPU offload, matching the benchmark scripts for `llama-bench`. |
-| `-c` / bench `-d` | `32768` | Long-context benchmark baseline. |
+| `-c` / bench `-d` | `131072` | Long-context benchmark baseline. |
 | `-b` / bench `-p` | `2048` | Long-context prompt batch size from benchmarks. |
 | `-ub` Vulkan | `512` | Vulkan long-context benchmark setting. |
 | `-ub` ROCm | `2048` | ROCm long-context benchmark setting. |
@@ -129,7 +129,7 @@ podman run --rm -it \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:vulkan \
   llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
-    -c 32768 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap
+    -c 131072 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap
 ```
 
 ROCm:
@@ -146,7 +146,7 @@ podman run --rm -it \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:rocm \
   llama-server -m /root/models/qwen/model.gguf --host 0.0.0.0 --port 8080 \
-    -c 32768 -b 2048 -ub 2048 -ngl 999 -fa 1 --no-mmap
+    -c 131072 -b 2048 -ub 2048 -ngl 999 -fa 1 --no-mmap
 ```
 
 Use the image tags in the backend table to switch between setups.
@@ -164,7 +164,7 @@ podman run --rm -it \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:vulkan \
   llama-server -m /root/models/qwen-mtp/model.gguf --host 0.0.0.0 --port 8080 \
-    -c 32768 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap \
+    -c 131072 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap \
     --spec-type draft-mtp --spec-draft-n-max 3 \
     --spec-type ngram-map-k4v \
     --spec-ngram-map-k4v-size-n 16 \
@@ -175,6 +175,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 32768`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
 The model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

@@ -29,7 +29,7 @@ Environment:
   MODELS_DIR            Host model directory to mount. Default: ~/models
   CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
   LLAMA_PORT            Host/container server port. Default: 8080
-  LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 32768
+  LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
   LLAMA_BATCH           Default logical batch size. Default: 2048
   LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048
   LLAMA_NGL             GPU layers to offload. Default: 999
@@ -115,7 +115,7 @@ esac
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
-LLAMA_CONTEXT="${LLAMA_CONTEXT:-32768}"
+LLAMA_CONTEXT="${LLAMA_CONTEXT:-131072}"
 LLAMA_BATCH="${LLAMA_BATCH:-2048}"
 LLAMA_UBATCH="${LLAMA_UBATCH:-$DEFAULT_UBATCH}"
 LLAMA_NGL="${LLAMA_NGL:-999}"

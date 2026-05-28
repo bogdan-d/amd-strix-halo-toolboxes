@@ -93,7 +93,7 @@ Important defaults:
 - `-fa 1` for server, MTP server, CLI, and bench;
 - `--no-mmap` for server, MTP server, and CLI;
 - full GPU offload by default for server/CLI;
-- `32768` context and `2048` batch as the baseline;
+- `131072` context and `2048` batch as the baseline;
 - backend-specific microbatch defaults: `512` for Vulkan and `2048` for ROCm;
 - `/dev/dri` for Vulkan and `/dev/dri` plus `/dev/kfd` for ROCm;
 - Hugging Face cache mounting through `HF_CACHE_DIR` and `HF_HOME`;

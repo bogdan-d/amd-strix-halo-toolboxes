@@ -23,7 +23,7 @@ These are the first knobs to decide for this repo.
 | `-fa`, `--flash-attn` | Use `-fa 1` or `--flash-attn on` | Required for reliable Strix Halo runs. |
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
-| `-c`, `--ctx-size` | Start at `32768` | Good baseline; raise only after memory planning. |
+| `-c`, `--ctx-size` | Start at `131072` | Good baseline; raise only after memory planning. |
 | `-b`, `--batch-size` | Start at `2048` | Logical batch. Good throughput baseline. |
 | `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. Larger can improve throughput but raises memory pressure. |
 | `-ctk`, `-ctv` | Usually leave `f16` | Quantized KV can save memory, but quality/perf tradeoffs need testing. |
@@ -395,7 +395,7 @@ llama-server \
   -m /models/model.gguf \
   --host 0.0.0.0 \
   --port 8080 \
-  -c 32768 \
+  -c 131072 \
   -b 2048 \
   -ub 2048 \
   -ngl 999 \
@@ -427,7 +427,7 @@ Raise `-c` first, then tune `-ub` down if memory pressure or crashes appear.
 llama-server \
   -m /models/model.gguf \
   --host 0.0.0.0 \
-  -c 32768 \
+  -c 131072 \
   -b 2048 \
   -ub 2048 \
   -ngl 999 \
@@ -463,7 +463,7 @@ llama-cli \
 1. Choose backend: ROCm for throughput, Vulkan RADV for compatibility.
 2. Choose model source: local `-m` for reproducibility, `-hf` for convenience.
 3. Set required Strix Halo flags: `-fa 1 --no-mmap`.
-4. Set context: `-c 32768`, then increase only after memory estimate.
+4. Set context: `-c 131072`, then increase only after memory estimate.
 5. Set batch: `-b 2048`, tune `-ub` per backend.
 6. Decide server slots: keep `-np 1` for largest models; raise only for smaller ones.
 7. Decide chat template: default metadata first; use `--chat-template-file` for local Jinja experiments.
