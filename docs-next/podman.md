@@ -41,10 +41,12 @@ bin/run.sh rocm server
 
 The default preset is `models/models.ini`, mounted into the container as
 `/root/models/models.ini` and passed to llama.cpp as `--models-preset`.
-The active Qwen3.6 presets use 262144 context, `parallel = 2`, full `f16` KV
-cache, device KV offload, context checkpoints with `cache-ram = 0`,
-`reasoning = on`, and
-provider-qualified model names. Clients select models by preset name:
+The active Qwen3.6 presets use 262144 context per request, `parallel = 1`, full
+`f16` KV cache, device KV offload, unified KV, context checkpoints with
+`cache-ram = 32768`, `image-min-tokens = 1024`, `reasoning = on`, and
+provider-qualified model names. `parallel > 1` splits `ctx-size` across server
+slots unless `ctx-size` is raised accordingly. Clients select models by preset
+name:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \

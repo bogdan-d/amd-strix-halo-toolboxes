@@ -93,9 +93,10 @@ Important defaults:
 
 - `models/models.ini` as the default llama.cpp `--models-preset`;
 - provider-qualified model IDs for preset routing;
-- Qwen3.6 max context, `parallel = 2`, `f16` KV cache, device KV offload,
-  context checkpoints with `cache-ram = 0`, and coding-agent sampling defaults
-  in the active preset;
+- Qwen3.6 max per-request context, `parallel = 1`, `f16` KV cache, device KV
+  offload, unified KV, context checkpoints with `cache-ram = 32768`,
+  `image-min-tokens = 1024`, and coding-agent sampling defaults in the active
+  preset;
 - `:non-reasoning` preset variants for each Qwen3.6 model, using
   `reasoning = off` and non-thinking sampling defaults;
 - `models/models.ini` keeps shared defaults in `[*]`; this currently exposes a

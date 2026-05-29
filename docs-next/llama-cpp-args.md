@@ -91,7 +91,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
 | `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Number of context checkpoints. |
 | `-cpent`, `--checkpoint-every-n-tokens` | both | Prefill checkpoint interval. |
-| `-cram`, `--cache-ram` | both | RAM limit for context/cache checkpointing. |
+| `-cram`, `--cache-ram` | both | RAM limit for context/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
 
 ## RoPE and Long Context
 
@@ -125,7 +125,7 @@ Leave model defaults unless deliberately extending context.
 | `--no-host` | both | Bypass host buffer to allow additional device buffers. |
 | `--check-tensors` | both | Validate model tensors during load. Slow diagnostic. |
 | `--op-offload`, `--no-op-offload` | both | Offload host tensor operations to device. |
-| `-kvu`, `--kv-unified`, `--no-kv-unified` | server | Use one shared KV buffer across slots. |
+| `-kvu`, `--kv-unified`, `--no-kv-unified` | server | Use one shared KV buffer across slots. Active Qwen3.6 presets enable this. |
 | `--cache-idle-slots`, `--no-cache-idle-slots` | server | Save/clear idle slot state. |
 | `--cache-prompt`, `--no-cache-prompt` | server | Reuse prompt cache. |
 | `--cache-reuse` | server | Minimum chunk size for KV cache reuse. |
@@ -265,7 +265,7 @@ These affect token choice after the model has produced logits.
 | `--mmproj-auto`, `--no-mmproj`, `--no-mmproj-auto` | both | Auto-use projector when available. |
 | `--mmproj-offload`, `--no-mmproj-offload` | both | Offload projector to GPU/device. |
 | `--image`, `--audio` | cli | Image/audio input files. |
-| `--image-min-tokens` | both | Minimum dynamic image tokens. |
+| `--image-min-tokens` | both | Minimum dynamic image tokens. Qwen-VL logs recommend at least `1024` for grounding tasks; active Qwen3.6 presets use `1024`. |
 | `--image-max-tokens` | both | Maximum dynamic image tokens. |
 | `-mv`, `--model-vocoder` | server | Vocoder model for audio generation. |
 | `--tts-use-guide-tokens` | server | Improve TTS word recall. |
