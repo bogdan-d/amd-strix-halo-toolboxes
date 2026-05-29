@@ -14,6 +14,26 @@ bin/run.sh rocm run llama-cli --help
 bin/run.sh rocm run llama-server --help
 ```
 
+## Argument Precedence
+
+For ordinary `llama-server` and `llama-cli` arguments, command-line arguments
+override matching environment variables such as `LLAMA_ARG_BATCH` or
+`LLAMA_ARG_UBATCH`.
+
+For `llama-server --models-preset` router mode, preset options are applied in
+this order:
+
+1. Command-line arguments passed to `llama-server`
+2. Model-specific options in the selected preset section
+3. Global options in the preset file's `[*]` section
+
+That means command-line values passed by `bin/run.sh`, such as
+`--batch-size` and `--ubatch-size`, override the fallback values in
+`models/models.ini`. Request-time generation options from API calls can still
+override sampling defaults for that request, but load-time settings such as
+context size, batch sizes, GPU layers, device placement, and KV cache types are
+fixed when the model instance starts.
+
 ## Strix Halo Baseline
 
 These are the first knobs to decide for this repo.
@@ -24,8 +44,8 @@ These are the first knobs to decide for this repo.
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
 | `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` | 131k is the conservative Strix Halo baseline; Qwen3.6 supports 256K and the active presets use it. |
-| `-b`, `--batch-size` | Start at `2048` | Logical batch. Good throughput baseline. |
-| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. Larger can improve throughput but raises memory pressure. |
+| `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation. |
+| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan below the values that are known to crash. |
 | `-ctk`, `-ctv` | Usually leave `f16` | Quantized KV can save memory, but quality/perf tradeoffs need testing. |
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
@@ -83,6 +103,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-n`, `--predict`, `--n-predict` | both | Max generated tokens. `-1` means unbounded. |
 | `-b`, `--batch-size` | both | Logical max batch. Affects prompt throughput and memory. |
 | `-ub`, `--ubatch-size` | both | Physical microbatch. Critical perf/memory knob. |
+| `GGML_HIP_MAX_BATCH_SIZE` | ROCm env | HIP backend batch cap. This repo sets it to `2048` for ROCm/ROCm-next helper runs unless overridden. |
 | `--keep` | both | Tokens kept when context shifts. |
 | `--swa-full` | both | Use full-size sliding-window-attention cache. |
 | `--perf`, `--no-perf` | both | Enable internal performance timings. |

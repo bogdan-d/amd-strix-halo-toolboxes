@@ -33,8 +33,10 @@ Environment:
   LLAMA_MODELS_MAX      Maximum models loaded by preset server. Default: 1
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
-  LLAMA_BATCH           Default logical batch size. Default: 2048
+  LLAMA_BATCH           Default logical batch size. Vulkan: 2048, ROCm: 4096
   LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048
+  GGML_HIP_MAX_BATCH_SIZE
+                        ROCm HIP batch cap. Default for ROCm: 2048
   LLAMA_NGL             GPU layers to offload. Default: 999
   LLAMA_BENCH_NGL       GPU layers for llama-bench. Default: 99
   LLAMA_PREDICT         Default CLI prediction tokens. Default: -1
@@ -96,18 +98,21 @@ case "$BACKEND" in
     BACKEND_NAME="vulkan"
     IMAGE="$IMAGE_PREFIX:vulkan"
     DEVICE_ARGS=(--device /dev/dri)
+    DEFAULT_BATCH=2048
     DEFAULT_UBATCH=512
     ;;
   rocm|rocm-7.2.3|rocm-7_2_3)
     BACKEND_NAME="rocm"
     IMAGE="$IMAGE_PREFIX:rocm"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
   rocm-next|rocm7-nightlies)
     BACKEND_NAME="rocm-next"
     IMAGE="$IMAGE_PREFIX:rocm-next"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
   *)
@@ -123,7 +128,7 @@ LLAMA_MODELS_PRESET="${LLAMA_MODELS_PRESET:-$MODELS_DIR/models.ini}"
 LLAMA_MODELS_MAX="${LLAMA_MODELS_MAX:-1}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 LLAMA_CONTEXT="${LLAMA_CONTEXT:-131072}"
-LLAMA_BATCH="${LLAMA_BATCH:-2048}"
+LLAMA_BATCH="${LLAMA_BATCH:-$DEFAULT_BATCH}"
 LLAMA_UBATCH="${LLAMA_UBATCH:-$DEFAULT_UBATCH}"
 LLAMA_NGL="${LLAMA_NGL:-999}"
 LLAMA_BENCH_NGL="${LLAMA_BENCH_NGL:-99}"
@@ -156,6 +161,10 @@ ENV_ARGS=()
 for name in "${ENV_NAMES[@]}"; do
   ENV_ARGS+=(--env "$name")
 done
+if [[ "$BACKEND_NAME" == rocm* ]]; then
+  GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
+  ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
+fi
 
 container_model_path() {
   local model="$1"
@@ -335,6 +344,8 @@ case "$ACTION" in
         --models-max "$LLAMA_MODELS_MAX" \
         --host 0.0.0.0 \
         --port "$LLAMA_PORT" \
+        --batch-size "$LLAMA_BATCH" \
+        --ubatch-size "$LLAMA_UBATCH" \
         "$@"
       exit 0
     fi

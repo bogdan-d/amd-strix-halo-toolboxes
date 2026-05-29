@@ -51,9 +51,9 @@ bin/run.sh vulkan mtp-server \
   3
 ```
 
-The helper applies the benchmark defaults for Strix Halo to direct model runs.
-Preset runs take those defaults from `models/models.ini`: Flash Attention,
-`mmap` off, full GPU offload, 262k context, and Qwen3.6 coding-agent sampling
-defaults.
+The helper applies the benchmark defaults for Strix Halo to direct model runs
+and supplies backend-specific batch defaults for preset runs. Preset runs take
+the remaining defaults from `models/models.ini`: Flash Attention, `mmap` off,
+full GPU offload, 262k context, and Qwen3.6 coding-agent sampling defaults.
 
 See [docs-next/podman.md](docs-next/podman.md) for the full Podman workflow and raw `podman run` examples.

@@ -44,9 +44,11 @@ The default preset is `models/models.ini`, mounted into the container as
 The active Qwen3.6 presets use 262144 context per request, `parallel = 1`, full
 `f16` KV cache, device KV offload, unified KV, context checkpoints with
 `cache-ram = 32768`, `image-min-tokens = 1024`, `reasoning = on`, and
-provider-qualified model names. `parallel > 1` splits `ctx-size` across server
-slots unless `ctx-size` is raised accordingly. Clients select models by preset
-name:
+provider-qualified model names. `bin/run.sh` supplies backend-specific
+`batch-size` and `ubatch-size` values on the preset server command line so ROCm
+can use larger prefill microbatches without making the shared preset unsafe for
+Vulkan. `parallel > 1` splits `ctx-size` across server slots unless `ctx-size`
+is raised accordingly. Clients select models by preset name:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
@@ -78,13 +80,20 @@ global section as a routeable `default` model. Treat that as a router artifact:
 do not request `model = "default"`, because it has no model path and fails to
 load.
 
-Two alternatives are worth considering if the `default` artifact becomes too
+In router mode, `llama-server` applies preset values in this order:
+
+1. Command-line arguments passed to `llama-server`
+2. Model-specific options in the selected preset section
+3. Global options in the preset file's `[*]` section
+
+`bin/run.sh` intentionally uses that precedence for backend-specific batch
+defaults. Its command-line `--batch-size` and `--ubatch-size` values override
+the shared fallback values in `models/models.ini`, letting ROCm use larger
+microbatches while keeping the preset file usable for raw/manual Vulkan runs.
+
+One alternative is worth considering if the `default` artifact becomes too
 noisy:
 
-- Move shared defaults onto the `llama-server --models-preset` command line in
-  `bin/run.sh`. This removes the artifact, but command-line values have higher
-  precedence than model sections, so per-model overrides for those keys stop
-  working.
 - Keep a DRY `models.template.ini` and have the helper generate an expanded
   temporary INI before launch. This preserves per-model override behavior and
   avoids `default`, but adds custom preprocessing before every preset server
@@ -154,13 +163,17 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `--no-mmap` | enabled for server/CLI | Avoids mmap-related memory fragmentation and crashes. |
 | `-ngl` | `999` for server/CLI, `99` for bench | Full GPU offload, matching the benchmark scripts for `llama-bench`. |
 | `-c` / bench `-d` | `131072` | Long-context benchmark baseline. |
-| `-b` / bench `-p` | `2048` | Long-context prompt batch size from benchmarks. |
+| `-b` / bench `-p` Vulkan | `2048` | Conservative Vulkan prompt batch baseline. |
+| `-b` / bench `-p` ROCm | `4096` | Matches the observed Strix Halo ROCm guidance of keeping logical batch at least 2x the 2048 physical microbatch. |
 | `-ub` Vulkan | `512` | Vulkan long-context benchmark setting. |
-| `-ub` ROCm | `2048` | ROCm long-context benchmark setting. |
+| `-ub` ROCm | `2048` | ROCm long-context benchmark setting and current prefill saturation target. |
+| `GGML_HIP_MAX_BATCH_SIZE` ROCm | `2048` | Keeps the HIP backend batch cap aligned with the ROCm microbatch default. |
 | `-mmp 0` | enabled for bench | Benchmark mmap-off equivalent. |
 
 The active `models/models.ini` Qwen3.6 presets override the direct-run context
-baseline with the model maximum, `ctx-size = 262144`.
+baseline with the model maximum, `ctx-size = 262144`. `bin/run.sh` overrides
+the preset file's fallback `batch-size` and `ubatch-size` with the backend
+defaults above.
 
 Override these with environment variables:
 
@@ -194,7 +207,8 @@ podman run --rm -it \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:vulkan \
   llama-server --models-preset /root/models/models.ini --models-max 1 \
-    --host 0.0.0.0 --port 8080
+    --host 0.0.0.0 --port 8080 \
+    --batch-size 2048 --ubatch-size 512
 ```
 
 ROCm:
@@ -207,11 +221,13 @@ podman run --rm -it \
   --ipc=host \
   --device /dev/dri \
   --device /dev/kfd \
+  -e GGML_HIP_MAX_BATCH_SIZE=2048 \
   -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:rocm \
   llama-server --models-preset /root/models/models.ini --models-max 1 \
-    --host 0.0.0.0 --port 8080
+    --host 0.0.0.0 --port 8080 \
+    --batch-size 4096 --ubatch-size 2048
 ```
 
 Use the image tags in the backend table to switch between setups.
