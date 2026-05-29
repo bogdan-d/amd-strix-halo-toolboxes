@@ -23,7 +23,7 @@ These are the first knobs to decide for this repo.
 | `-fa`, `--flash-attn` | Use `-fa 1` or `--flash-attn on` | Required for reliable Strix Halo runs. |
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
-| `-c`, `--ctx-size` | Start at `131072` | Good baseline; raise only after memory planning. |
+| `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` | 131k is the conservative Strix Halo baseline; Qwen3.6 supports 256K and the active presets use it. |
 | `-b`, `--batch-size` | Start at `2048` | Logical batch. Good throughput baseline. |
 | `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. Larger can improve throughput but raises memory pressure. |
 | `-ctk`, `-ctv` | Usually leave `f16` | Quantized KV can save memory, but quality/perf tradeoffs need testing. |
@@ -114,9 +114,9 @@ Leave model defaults unless deliberately extending context.
 | Argument | Applies | Meaning |
 | --- | --- | --- |
 | `-fa`, `--flash-attn` | both | Flash Attention mode. Use on Strix Halo. |
-| `-kvo`, `--kv-offload`, `--no-kv-offload` | both | Put KV cache on device when possible. |
-| `-ctk`, `--cache-type-k` | both | KV key datatype. |
-| `-ctv`, `--cache-type-v` | both | KV value datatype. |
+| `-kvo`, `--kv-offload`, `--no-kv-offload` | both | Put KV cache on device when possible. Active Qwen3.6 presets use device KV offload. |
+| `-ctk`, `--cache-type-k` | both | KV key datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `f16`. |
+| `-ctv`, `--cache-type-v` | both | KV value datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `f16`. |
 | `-dt`, `--defrag-thold` | both | Deprecated KV defrag threshold. |
 | `--mlock` | both | Keep model pages resident in RAM. |
 | `--mmap`, `--no-mmap` | both | Memory-map model file. Use `--no-mmap` here. |
@@ -248,7 +248,7 @@ These affect token choice after the model has produced logits.
 | `--jinja`, `--no-jinja` | both | Use Jinja chat template engine. |
 | `--chat-template` | both | Built-in or inline chat template. |
 | `--chat-template-file` | both | Template file. Useful for `jinja/` experiments. |
-| `--chat-template-kwargs` | both | JSON kwargs passed to template parser. |
+| `--chat-template-kwargs` | both | JSON kwargs passed to template parser. Do not use `enable_thinking` here; current llama.cpp warns to use `--reasoning on/off` instead. |
 | `--skip-chat-parsing`, `--no-skip-chat-parsing` | both | Disable structured chat parsing. |
 | `--reasoning-format` | both | How to expose/extract thinking text. |
 | `-rea`, `--reasoning` | both | Enable, disable, or auto-detect reasoning mode. |

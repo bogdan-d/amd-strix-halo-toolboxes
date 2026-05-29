@@ -93,11 +93,18 @@ Important defaults:
 
 - `models/models.ini` as the default llama.cpp `--models-preset`;
 - provider-qualified model IDs for preset routing;
-- Qwen3.6 coding-agent sampling defaults in the active preset;
+- Qwen3.6 max context, `parallel = 2`, `f16` KV cache, device KV offload,
+  context checkpoints with `cache-ram = 0`, and coding-agent sampling defaults
+  in the active preset;
+- `:non-reasoning` preset variants for each Qwen3.6 model, using
+  `reasoning = off` and non-thinking sampling defaults;
+- `models/models.ini` keeps shared defaults in `[*]`; this currently exposes a
+  broken `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;
 - `--no-mmap` for direct server, MTP server, and CLI;
 - full GPU offload by default for server/CLI;
-- `131072` context and `2048` batch as the baseline;
+- `262144` context for active Qwen3.6 presets;
+- `131072` context and `2048` batch as the direct-run baseline;
 - backend-specific microbatch defaults: `512` for Vulkan and `2048` for ROCm;
 - `/dev/dri` for Vulkan and `/dev/dri` plus `/dev/kfd` for ROCm;
 - Hugging Face cache mounting through `HF_CACHE_DIR` and `HF_HOME`;
@@ -107,6 +114,13 @@ Important defaults:
 
 See [podman.md](podman.md) for the complete runtime flow and raw `podman run`
 examples.
+
+If the `default` router artifact becomes unacceptable, two designs are already
+identified: move shared preset defaults into the `bin/run.sh` `llama-server`
+command line, or introduce a `models.template.ini` source and generate an
+expanded temporary preset at runtime. The command-line approach is simpler but
+prevents lower-precedence per-model overrides for those keys. The template
+approach keeps override behavior but adds repo-specific preprocessing.
 
 ## Legacy Boundary
 

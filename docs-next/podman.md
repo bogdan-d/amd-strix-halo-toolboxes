@@ -41,7 +41,10 @@ bin/run.sh rocm server
 
 The default preset is `models/models.ini`, mounted into the container as
 `/root/models/models.ini` and passed to llama.cpp as `--models-preset`.
-Clients select models by provider-qualified preset name:
+The active Qwen3.6 presets use 262144 context, `parallel = 2`, full `f16` KV
+cache, device KV offload, context checkpoints with `cache-ram = 0`,
+`reasoning = on`, and
+provider-qualified model names. Clients select models by preset name:
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \
@@ -52,12 +55,38 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
+Every Qwen3.6 preset also has a `:non-reasoning` variant that uses
+`reasoning = off` and the non-thinking sampling defaults from the Unsloth
+Qwen3.6 guidance. For example:
+
+```json
+"model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:non-reasoning"
+```
+
 Use `LLAMA_MODELS_PRESET` to point at another preset under `MODELS_DIR`:
 
 ```bash
 LLAMA_MODELS_PRESET=/var/mnt/xdata/models/models-sample-2.ini \
   bin/run.sh rocm server
 ```
+
+`models/models.ini` uses llama.cpp's documented `[*]` global section to keep
+shared defaults in one place. The current server build may also expose that
+global section as a routeable `default` model. Treat that as a router artifact:
+do not request `model = "default"`, because it has no model path and fails to
+load.
+
+Two alternatives are worth considering if the `default` artifact becomes too
+noisy:
+
+- Move shared defaults onto the `llama-server --models-preset` command line in
+  `bin/run.sh`. This removes the artifact, but command-line values have higher
+  precedence than model sections, so per-model overrides for those keys stop
+  working.
+- Keep a DRY `models.template.ini` and have the helper generate an expanded
+  temporary INI before launch. This preserves per-model override behavior and
+  avoids `default`, but adds custom preprocessing before every preset server
+  start.
 
 Check model-load without leaving a server running:
 
@@ -127,6 +156,9 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `-ub` Vulkan | `512` | Vulkan long-context benchmark setting. |
 | `-ub` ROCm | `2048` | ROCm long-context benchmark setting. |
 | `-mmp 0` | enabled for bench | Benchmark mmap-off equivalent. |
+
+The active `models/models.ini` Qwen3.6 presets override the direct-run context
+baseline with the model maximum, `ctx-size = 262144`.
 
 Override these with environment variables:
 
