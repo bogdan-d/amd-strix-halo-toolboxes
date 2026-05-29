@@ -61,10 +61,19 @@ Override the image prefix:
 IMAGE_PREFIX=localhost/strix-halo bin/build.sh rocm
 ```
 
-Pass advanced build flags with `BUILD_EXTRA_ARGS`:
+Rebuild without using cached image layers, while keeping the Buildah storage and
+cache mount contents intact:
 
 ```bash
-BUILD_EXTRA_ARGS="--no-cache" bin/build.sh rocm
+bin/build.sh --no-cache rocm
+bin/build.sh --no-cache rocm rocm-next vulkan
+NO_CACHE=1 bin/build.sh rocm
+```
+
+Pass less common build flags with `BUILD_EXTRA_ARGS`:
+
+```bash
+BUILD_EXTRA_ARGS="--pull-always" bin/build.sh rocm
 ```
 
 Enable llama.cpp's rocWMMA flash-attention kernels for ROCm builds:

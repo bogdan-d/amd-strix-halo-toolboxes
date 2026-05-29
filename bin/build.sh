@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan]...
+  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -19,6 +19,7 @@ Environment:
   BUILD_LOG_MODE     progress or full. Default: progress
   BUILD_LOG_DIR      Directory for full build logs. Default: .build-logs
   BUILD_LOG_TAIL     Full-log lines to print on failure. Default: 160
+  NO_CACHE           Pass --no-cache to the builder. Default: 0
   DRY_RUN            Print build commands without running them. Default: 0
   BUILD_EXTRA_ARGS   Extra build arguments inserted before the context
   ROCWMMA_FATTN      Enable rocWMMA flash-attention kernels for ROCm builds.
@@ -30,6 +31,7 @@ Examples:
   bin/build.sh rocm=7.2.3
   bin/build.sh rocm-next
   bin/build.sh vulkan
+  bin/build.sh --no-cache rocm rocm-next
   bin/build.sh --with-rocwmma rocm rocm-next
   BUILDER=podman bin/build.sh all
 EOF
@@ -50,6 +52,7 @@ TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
 BUILD_LOG_MODE="${BUILD_LOG_MODE:-progress}"
 BUILD_LOG_DIR="${BUILD_LOG_DIR:-.build-logs}"
 BUILD_LOG_TAIL="${BUILD_LOG_TAIL:-160}"
+NO_CACHE="${NO_CACHE:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 ROCWMMA_FATTN="${ROCWMMA_FATTN:-0}"
 
@@ -84,6 +87,9 @@ for target in "$@"; do
       ;;
     --with-rocwmma)
       ROCWMMA_FATTN=1
+      ;;
+    --no-cache)
+      NO_CACHE=1
       ;;
     all)
       TARGETS+=(rocm rocm-next vulkan)
@@ -136,6 +142,15 @@ case "$ROCWMMA_FATTN" in
     ;;
 esac
 
+case "$NO_CACHE" in
+  0|1) ;;
+  *)
+    echo "NO_CACHE must be 0 or 1, got: $NO_CACHE" >&2
+    usage
+    exit 1
+    ;;
+esac
+
 BUILD_EXTRA=()
 if [[ -n "${BUILD_EXTRA_ARGS:-}" ]]; then
   # Intentional shell splitting: this variable is for advanced build flags.
@@ -148,7 +163,12 @@ build_image() {
   local rocm_repo_url="https://repo.radeon.com/rocm/rhel10/${ROCM_VERSION}/main"
   local tag_args=()
   local cache_args=()
+  local no_cache_args=()
   local cmd=()
+
+  if [[ "$NO_CACHE" == "1" ]]; then
+    no_cache_args=(--no-cache)
+  fi
 
   if [[ -n "${BUILD_CACHE_REPO:-}" ]]; then
     cache_args=(
@@ -198,6 +218,7 @@ build_image() {
   if [[ "$BUILDER" == "buildah" ]]; then
     cmd=("$BUILDER" bud \
       --pull \
+      "${no_cache_args[@]}" \
       --format oci \
       --layers \
       --build-arg "BUILD_TYPE=$build_type" \
@@ -214,6 +235,7 @@ build_image() {
   else
     cmd=("$BUILDER" build \
       --pull \
+      "${no_cache_args[@]}" \
       --format oci \
       --layers \
       --build-arg "BUILD_TYPE=$build_type" \
