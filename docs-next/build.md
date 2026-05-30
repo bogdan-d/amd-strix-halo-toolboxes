@@ -28,7 +28,7 @@ The default tags are:
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` |
 
 By default, `rocm` is also tagged as
-`localhost/amd-strix-halo-toolboxes:rocm-7.2.3`, and `rocm-next` is also tagged
+`localhost/amd-strix-halo-toolboxes:rocm-7.2.4`, and `rocm-next` is also tagged
 as `localhost/amd-strix-halo-toolboxes:rocm7-nightlies`.
 
 ## Build Script
@@ -37,7 +37,7 @@ as `localhost/amd-strix-halo-toolboxes:rocm7-nightlies`.
 
 ```bash
 bin/build.sh rocm
-bin/build.sh rocm=7.2.3
+bin/build.sh rocm=7.2.4
 ```
 
 By default, the script runs in `BUILD_LOG_MODE=progress`: it writes the full
@@ -109,7 +109,7 @@ CPU_TARGET=strix-halo bin/build.sh rocm
 ```
 
 Non-generic CPU targets use only variant tags, for example `rocm-strix-halo`,
-`rocm-7.2.3-strix-halo`, and `rocm-next-strix-halo`. They do not overwrite
+`rocm-7.2.4-strix-halo`, and `rocm-next-strix-halo`. They do not overwrite
 the default `rocm`, `rocm-next`, or `vulkan` tags. Buildah cache repositories
 and CMake build directories include the CPU target, so generic and Strix Halo
 builds do not reuse each other's CMake cache.
@@ -134,13 +134,13 @@ The script expands to commands like this:
 ```bash
 buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm \
-  --build-arg ROCM_VERSION=7.2.3 \
-  --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.3/main \
+  --build-arg ROCM_VERSION=7.2.4 \
+  --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.4/main \
   --build-arg LLAMA_REF= \
   --build-arg CPU_TARGET=generic \
   --build-arg ROCWMMA_FATTN=0 \
   -t localhost/amd-strix-halo-toolboxes:rocm \
-  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.3 \
+  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.4 \
   -f containers/Containerfile .
 ```
 

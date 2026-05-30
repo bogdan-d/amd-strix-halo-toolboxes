@@ -10,7 +10,7 @@ Environment:
   BUILDER            buildah or podman. Default: buildah
   IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
   CONTAINERFILE      Containerfile path. Default: containers/Containerfile
-  ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.3
+  ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.4
   LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
@@ -28,7 +28,7 @@ Environment:
 Examples:
   bin/build.sh
   bin/build.sh rocm
-  bin/build.sh rocm=7.2.3
+  bin/build.sh rocm=7.2.4
   bin/build.sh rocm-next
   bin/build.sh vulkan
   bin/build.sh --no-cache rocm rocm-next
@@ -44,7 +44,7 @@ load_dotenv_defaults "$PROJECT_ROOT/.env"
 BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
-ROCM_VERSION="${ROCM_VERSION:-7.2.3}"
+ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 LLAMA_REF="${LLAMA_REF:-}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
@@ -97,16 +97,16 @@ for target in "$@"; do
     rocm|rocm-next|vulkan)
       TARGETS+=("$target")
       ;;
+    rocm=7.2.3|rocm:7.2.3|rocm-7.2.3)
+      echo "ROCm 7.2.3 tags were dropped from the next workflow; use rocm or rocm-7.2.4." >&2
+      exit 1
+      ;;
     rocm=*|rocm:*)
       ROCM_VERSION="${target#rocm?}"
       TARGETS+=(rocm)
       ;;
     rocm-[0-9]*.[0-9]*.[0-9]*)
       ROCM_VERSION="${target#rocm-}"
-      TARGETS+=(rocm)
-      ;;
-    rocm-7.2.3)
-      ROCM_VERSION=7.2.3
       TARGETS+=(rocm)
       ;;
     rocm7-nightlies)

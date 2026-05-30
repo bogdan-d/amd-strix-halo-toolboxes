@@ -45,7 +45,7 @@ The shared Containerfile currently supports three build types:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
-| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | Stable ROCm, defaulting to ROCm 7.2.3. |
+| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
 
@@ -66,7 +66,7 @@ also use Podman through `BUILDER=podman`.
 
 Important behavior added locally:
 
-- target aliases such as `rocm`, `rocm=7.2.3`, `rocm-next`, `rocm7-nightlies`,
+- target aliases such as `rocm`, `rocm=7.2.4`, `rocm-next`, `rocm7-nightlies`,
   `vulkan`, and `vulkan-radv`;
 - `LLAMA_REF` to optionally pin llama.cpp across all backends for tests,
   bisects, or preserved builds;

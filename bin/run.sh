@@ -101,7 +101,7 @@ case "$BACKEND" in
     DEFAULT_BATCH=2048
     DEFAULT_UBATCH=512
     ;;
-  rocm|rocm-7.2.3|rocm-7_2_3)
+  rocm|rocm-7.2.4|rocm-7_2_4)
     BACKEND_NAME="rocm"
     IMAGE="$IMAGE_PREFIX:rocm"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)

@@ -24,11 +24,11 @@ If you prefer plain Podman containers, use the helper script instead of creating
 ```bash
 export MODELS_DIR=/var/mnt/xdata/models
 
-bin/run.sh rocm-7.2.3 list-devices
+bin/run.sh rocm-7.2.4 list-devices
 
-bin/run.sh rocm-7.2.3 models
+bin/run.sh rocm-7.2.4 models
 
-bin/run.sh rocm-7.2.3 server
+bin/run.sh rocm-7.2.4 server
 ```
 
 By default, `server` loads `models/models.ini` through llama.cpp
@@ -37,11 +37,11 @@ By default, `server` loads `models/models.ini` through llama.cpp
 For a bounded model-load smoke test that stops the server automatically:
 
 ```bash
-bin/run.sh rocm-7.2.3 load-test \
+bin/run.sh rocm-7.2.4 load-test \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
-Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `rocm-7.2.3`, `rocm-7_2_3`, `rocm-next`, and `rocm7-nightlies`.
+Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `rocm-7.2.4`, `rocm-7_2_4`, `rocm-next`, and `rocm7-nightlies`.
 
 For MTP builds:
 
