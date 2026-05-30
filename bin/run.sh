@@ -7,9 +7,12 @@ Usage:
   bin/run.sh <backend> <command> [args...]
 
 Backends:
-  rocm       Stable ROCm image
-  rocm-next  ROCm nightly image
-  vulkan     Vulkan RADV image
+  rocm       Stable ROCm image resolved from CPU_TARGET
+  rocm-next  ROCm nightly image resolved from CPU_TARGET
+  vulkan     Vulkan RADV image resolved from CPU_TARGET
+  Explicit build tags from bin/build.sh also work, for example:
+             rocm-7.2.4, rocm-strix-halo, rocm-next-strix-halo,
+             rocm7-nightlies-native, vulkan-native
 
 Commands:
   shell                 Open a shell in a running selected image, or start one
@@ -27,6 +30,8 @@ Commands:
 Environment:
   .env                  Root project .env is loaded automatically if present
   IMAGE_PREFIX          Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
+  CPU_TARGET            Image CPU target variant. Default: generic
+  ROCM_VERSION          Stable ROCm version for versioned rocm aliases. Default: 7.2.4
   MODELS_DIR            Host model directory to mount. Default: ~/models
   CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
   LLAMA_MODELS_PRESET   Host models preset file. Default: $MODELS_DIR/models.ini
@@ -51,18 +56,21 @@ Environment:
 
 Examples:
   bin/run.sh rocm list-devices
+  CPU_TARGET=strix-halo bin/run.sh rocm list-devices
   bin/run.sh rocm models
   bin/run.sh vulkan server
+  bin/run.sh rocm-7.2.4 server
   bin/run.sh vulkan server ~/models/model.gguf
   bin/run.sh rocm-next cli ~/models/model.gguf -p "Hello"
 EOF
 }
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$PROJECT_ROOT/bin/env-defaults.sh"
 ENV_FILE="$PROJECT_ROOT/.env"
 ENV_NAMES=()
 
-load_env_file() {
+collect_env_names() {
   local env_file="$1"
   local line name
 
@@ -74,14 +82,10 @@ load_env_file() {
     name="${BASH_REMATCH[2]}"
     ENV_NAMES+=("$name")
   done < "$env_file"
-
-  set -a
-  # shellcheck disable=SC1090
-  source "$env_file"
-  set +a
 }
 
-load_env_file "$ENV_FILE"
+collect_env_names "$ENV_FILE"
+load_dotenv_defaults "$ENV_FILE"
 
 if [[ $# -lt 2 ]]; then
   usage
@@ -92,25 +96,104 @@ BACKEND="$1"
 ACTION="$2"
 shift 2
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
+CPU_TARGET="${CPU_TARGET:-generic}"
+ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 
-case "$BACKEND" in
-  vulkan|vulkan-radv|vulkan_radv)
-    BACKEND_NAME="vulkan"
-    IMAGE="$IMAGE_PREFIX:vulkan"
+cpu_target_suffix() {
+  if [[ "$CPU_TARGET" == "generic" ]]; then
+    return 0
+  fi
+
+  printf -- '-%s' "$CPU_TARGET"
+}
+
+stable_rocm_tag() {
+  printf 'rocm%s' "$(cpu_target_suffix)"
+}
+
+stable_rocm_version_tag() {
+  if [[ "$CPU_TARGET" == "generic" ]]; then
+    printf 'rocm-%s' "$ROCM_VERSION"
+    return 0
+  fi
+
+  printf 'rocm-%s-%s' "$ROCM_VERSION" "$CPU_TARGET"
+}
+
+rocm_next_tag() {
+  printf 'rocm-next%s' "$(cpu_target_suffix)"
+}
+
+rocm_next_alias_tag() {
+  printf 'rocm7-nightlies%s' "$(cpu_target_suffix)"
+}
+
+vulkan_tag() {
+  printf 'vulkan%s' "$(cpu_target_suffix)"
+}
+
+BACKEND_INPUT="${BACKEND//_/-}"
+
+case "$BACKEND_INPUT" in
+  vulkan|vulkan-radv)
+    BACKEND_FAMILY="vulkan"
+    IMAGE_TAG="$(vulkan_tag)"
     DEVICE_ARGS=(--device /dev/dri)
     DEFAULT_BATCH=2048
     DEFAULT_UBATCH=512
     ;;
-  rocm|rocm-7.2.4|rocm-7_2_4)
-    BACKEND_NAME="rocm"
-    IMAGE="$IMAGE_PREFIX:rocm"
+  vulkan-radv-*)
+    BACKEND_FAMILY="vulkan"
+    IMAGE_TAG="vulkan-${BACKEND_INPUT#vulkan-radv-}"
+    DEVICE_ARGS=(--device /dev/dri)
+    DEFAULT_BATCH=2048
+    DEFAULT_UBATCH=512
+    ;;
+  vulkan-*)
+    BACKEND_FAMILY="vulkan"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri)
+    DEFAULT_BATCH=2048
+    DEFAULT_UBATCH=512
+    ;;
+  rocm-next)
+    BACKEND_FAMILY="rocm-next"
+    IMAGE_TAG="$(rocm_next_tag)"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
-  rocm-next|rocm7-nightlies)
-    BACKEND_NAME="rocm-next"
-    IMAGE="$IMAGE_PREFIX:rocm-next"
+  rocm7-nightlies)
+    BACKEND_FAMILY="rocm-next"
+    IMAGE_TAG="$(rocm_next_alias_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
+    DEFAULT_UBATCH=2048
+    ;;
+  rocm-next-*|rocm7-nightlies-*)
+    BACKEND_FAMILY="rocm-next"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
+    DEFAULT_UBATCH=2048
+    ;;
+  rocm)
+    BACKEND_FAMILY="rocm"
+    IMAGE_TAG="$(stable_rocm_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
+    DEFAULT_UBATCH=2048
+    ;;
+  "rocm-$ROCM_VERSION")
+    BACKEND_FAMILY="rocm"
+    IMAGE_TAG="$(stable_rocm_version_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
+    DEFAULT_UBATCH=2048
+    ;;
+  rocm-[0-9]*.[0-9]*.[0-9]*|rocm-*)
+    BACKEND_FAMILY="rocm"
+    IMAGE_TAG="$BACKEND_INPUT"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
@@ -121,6 +204,8 @@ case "$BACKEND" in
     exit 1
     ;;
 esac
+
+IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
@@ -137,7 +222,7 @@ LLAMA_LOAD_TEST_TIMEOUT="${LLAMA_LOAD_TEST_TIMEOUT:-120}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 HF_HOME="${HF_HOME:-/root/.cache/huggingface}"
 PODMAN_NAME_PREFIX="${PODMAN_NAME_PREFIX:-amd-strix-halo-llama}"
-DEFAULT_CONTAINER_NAME="$PODMAN_NAME_PREFIX-$BACKEND_NAME-$ACTION"
+DEFAULT_CONTAINER_NAME="$PODMAN_NAME_PREFIX-$IMAGE_TAG-$ACTION"
 
 if [[ "$ACTION" == "pull" ]]; then
   exec podman pull "$IMAGE"
@@ -161,7 +246,7 @@ ENV_ARGS=()
 for name in "${ENV_NAMES[@]}"; do
   ENV_ARGS+=(--env "$name")
 done
-if [[ "$BACKEND_NAME" == rocm* ]]; then
+if [[ "$BACKEND_FAMILY" == rocm* ]]; then
   GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
   ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
 fi
@@ -413,6 +498,7 @@ case "$ACTION" in
       --cache-ram 0 \
       --no-ui \
       "$@")"
+    # shellcheck disable=SC2329
     cleanup_load_test() {
       podman stop "$CONTAINER_ID" >/dev/null 2>&1 || true
     }

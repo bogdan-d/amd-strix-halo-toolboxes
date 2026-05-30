@@ -84,10 +84,11 @@ See [build.md](build.md) for commands and smoke tests.
 
 ## Runtime Workflow
 
-`bin/run.sh` is the primary runtime helper. It maps local backend names
-to image tags, mounts the model directory, exposes the server port, starts
-`llama-server` from `models/models.ini` by default, and keeps direct model paths
-available for one-off runs.
+`bin/run.sh` is the primary runtime helper. It maps local backend names to image
+tags, using same `CPU_TARGET` and `ROCM_VERSION` defaults as `bin/build.sh` so
+runtime selection matches build tags. It mounts the model directory, exposes
+the server port, starts `llama-server` from `models/models.ini` by default, and
+keeps direct model paths available for one-off runs.
 
 Important defaults:
 

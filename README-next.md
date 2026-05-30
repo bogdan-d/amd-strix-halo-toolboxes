@@ -26,6 +26,8 @@ export MODELS_DIR=/var/mnt/xdata/models
 
 bin/run.sh rocm-7.2.4 list-devices
 
+CPU_TARGET=strix-halo bin/run.sh rocm list-devices
+
 bin/run.sh rocm-7.2.4 models
 
 bin/run.sh rocm-7.2.4 server
@@ -41,7 +43,13 @@ bin/run.sh rocm-7.2.4 load-test \
   /var/mnt/xdata/models/qwen/model.gguf
 ```
 
-Supported backend names are `vulkan`, `vulkan-radv`, `vulkan_radv`, `rocm`, `rocm-7.2.4`, `rocm-7_2_4`, `rocm-next`, and `rocm7-nightlies`.
+Supported backend names include logical aliases such as `vulkan`, `rocm`,
+`rocm-7.2.4`, `rocm-next`, and `rocm7-nightlies`, plus explicit build tags from
+`bin/build.sh` such as `vulkan-strix-halo`, `rocm-strix-halo`,
+`rocm-7.2.4-strix-halo`, and `rocm-next-native`. When `CPU_TARGET` is not
+`generic`, `bin/run.sh rocm ...`, `bin/run.sh rocm-7.2.4 ...`,
+`bin/run.sh rocm-next ...`, and `bin/run.sh vulkan ...` resolve to the matching
+CPU-target tag automatically.
 
 For MTP builds:
 

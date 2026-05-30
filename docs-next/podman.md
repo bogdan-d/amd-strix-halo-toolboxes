@@ -8,9 +8,15 @@ The helper script supports the local next-workflow images:
 
 | Backend | Image | GPU devices |
 | :--- | :--- | :--- |
-| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | `/dev/dri`, `/dev/kfd` |
-| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | `/dev/dri`, `/dev/kfd` |
-| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | `/dev/dri` |
+| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` by default, or `:rocm-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm-7.2.4` | `localhost/amd-strix-halo-toolboxes:rocm-7.2.4` by default, or `:rocm-7.2.4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` by default, or `:rocm-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm7-nightlies` | `localhost/amd-strix-halo-toolboxes:rocm7-nightlies` by default, or `:rocm7-nightlies-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` by default, or `:vulkan-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
+
+`vulkan-radv` and `vulkan_radv` are aliases for `vulkan`. Explicit tags created
+by `bin/build.sh` also work directly, for example `rocm-strix-halo`,
+`rocm-7.2.4-strix-halo`, `rocm-next-native`, or `vulkan-native`.
 
 ## Quick Start
 
@@ -24,8 +30,23 @@ Check GPU visibility:
 
 ```bash
 bin/run.sh rocm list-devices
+CPU_TARGET=strix-halo bin/run.sh rocm list-devices
 bin/run.sh vulkan list-devices
 ```
+
+`bin/run.sh` uses same `CPU_TARGET` and `ROCM_VERSION` defaults as
+`bin/build.sh`, so non-generic image variants built with `CPU_TARGET=strix-halo`
+or `CPU_TARGET=native` can be run without spelling full tag each time:
+
+```bash
+CPU_TARGET=strix-halo bin/run.sh rocm server
+CPU_TARGET=strix-halo bin/run.sh rocm-7.2.4 server
+CPU_TARGET=native bin/run.sh vulkan list-devices
+```
+
+Those commands resolve to `:rocm-strix-halo`, `:rocm-7.2.4-strix-halo`, and
+`:vulkan-native`. You can also pass exact build tag as backend argument if you
+want to bypass env-based resolution.
 
 List the configured model IDs:
 
