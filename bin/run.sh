@@ -224,10 +224,6 @@ HF_HOME="${HF_HOME:-/root/.cache/huggingface}"
 PODMAN_NAME_PREFIX="${PODMAN_NAME_PREFIX:-amd-strix-halo-llama}"
 DEFAULT_CONTAINER_NAME="$PODMAN_NAME_PREFIX-$IMAGE_TAG-$ACTION"
 
-if [[ "$ACTION" == "pull" ]]; then
-  exec podman pull "$IMAGE"
-fi
-
 RUN_TTY=()
 if [[ -t 0 && -t 1 ]]; then
   RUN_TTY=(-it)
@@ -322,6 +318,55 @@ container_name_args() {
   printf '%s\n' --replace --name "${PODMAN_NAME:-$DEFAULT_CONTAINER_NAME}"
 }
 
+selected_container() {
+  local i
+
+  if [[ -n "${PODMAN_CONTAINER:-}" ]]; then
+    printf '%s\n' "$PODMAN_CONTAINER"
+    return 0
+  fi
+
+  for (( i = 0; i < ${#PODMAN_RUN_ARGS[@]}; i++ )); do
+    if [[ "${PODMAN_RUN_ARGS[i]}" == "--name" ]] && (( i + 1 < ${#PODMAN_RUN_ARGS[@]} )); then
+      printf '%s\n' "${PODMAN_RUN_ARGS[i + 1]}"
+      return 0
+    fi
+  done
+
+  printf '%s\n' '(ephemeral)'
+}
+
+log_selection() {
+  local container_name="$1"
+  printf 'run.sh: selected image=%s container=%s action=%s\n' "$IMAGE" "$container_name" "$ACTION" >&2
+}
+
+log_command() {
+  printf 'run.sh: command:' >&2
+  printf ' %q' "$@" >&2
+  printf '\n' >&2
+}
+
+run_logged() {
+  local container_name="$1"
+  shift
+  log_selection "$container_name"
+  log_command "$@"
+  "$@"
+}
+
+exec_logged() {
+  local container_name="$1"
+  shift
+  log_selection "$container_name"
+  log_command "$@"
+  exec "$@"
+}
+
+if [[ "$ACTION" == "pull" ]]; then
+  exec_logged '(image-only)' podman pull "$IMAGE"
+fi
+
 running_container_id() {
   local ids=()
 
@@ -349,7 +394,7 @@ running_container_id() {
 }
 
 base_run() {
-  podman run --rm "${RUN_TTY[@]}" \
+  local cmd=(podman run --rm "${RUN_TTY[@]}" \
     --security-opt seccomp=unconfined \
     --security-opt label=disable \
     --group-add keep-groups \
@@ -360,11 +405,12 @@ base_run() {
     "${ENV_ARGS[@]}" \
     "${EXTRA_ARGS[@]}" \
     "${PODMAN_RUN_ARGS[@]}" \
-    "$IMAGE" "$@"
+    "$IMAGE" "$@")
+  run_logged "$(selected_container)" "${cmd[@]}"
 }
 
 base_run_detached() {
-  podman run --rm --detach \
+  local cmd=(podman run --rm --detach \
     --security-opt seccomp=unconfined \
     --security-opt label=disable \
     --group-add keep-groups \
@@ -375,7 +421,8 @@ base_run_detached() {
     "${ENV_ARGS[@]}" \
     "${EXTRA_ARGS[@]}" \
     "${PODMAN_RUN_ARGS[@]}" \
-    "$IMAGE" "$@"
+    "$IMAGE" "$@")
+  run_logged "$(selected_container)" "${cmd[@]}"
 }
 
 require_model() {
@@ -407,7 +454,7 @@ list_models_preset() {
 case "$ACTION" in
   shell)
     if CONTAINER_ID="$(running_container_id)"; then
-      exec podman exec "${RUN_TTY[@]}" "$CONTAINER_ID" /bin/bash
+      exec_logged "$CONTAINER_ID" podman exec "${RUN_TTY[@]}" "$CONTAINER_ID" /bin/bash
     fi
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     base_run /bin/bash
