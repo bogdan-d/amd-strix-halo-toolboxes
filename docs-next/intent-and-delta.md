@@ -87,22 +87,26 @@ See [build.md](build.md) for commands and smoke tests.
 `bin/run.sh` is the primary runtime helper. It maps local backend names to image
 tags, using same `CPU_TARGET` and `ROCM_VERSION` defaults as `bin/build.sh` so
 runtime selection matches build tags. It mounts the model directory, exposes
-the server port, starts `llama-server` from `models/models.ini` by default, and
-keeps direct model paths available for one-off runs.
+the server port, generates a temporary `llama-server --models-preset` from
+`models-template.ini` and discovered GGUF files by default, and keeps direct
+model paths available for one-off runs.
 
 Important defaults:
 
-- `models/models.ini` as the default llama.cpp `--models-preset`;
-- provider-qualified model IDs for preset routing;
+- `models-template.ini` as the tracked source for generated llama.cpp
+  `--models-preset` files;
+- provider-qualified model IDs generated from `author/repo:quant` paths;
 - Qwen3.6 max per-request context with YaRN scaling from 32k to 256k,
   `parallel = 1`, `f16` KV cache, device KV offload, unified KV, context
   checkpoints with `cache-ram = 32768`,
   `image-min-tokens = 1024`, and coding-agent sampling defaults in the active
   preset;
-- `:non-reasoning` preset variants for each Qwen3.6 model, using
+- `:non-reasoning` preset variants for each discovered Qwen/Qwen-derived model, using
   `reasoning = off` and non-thinking sampling defaults;
-- `models/models.ini` keeps shared defaults in `[*]`; this currently exposes a
-  broken `default` router model, so clients should not request `default`;
+- automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
+  for paths or filenames containing `MTP` or `mtp`;
+- generated presets keep shared defaults in `[*]`; this can expose a broken
+  `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;
 - `--no-mmap` for direct server, MTP server, and CLI;
 - full GPU offload by default for server/CLI;
@@ -118,13 +122,6 @@ Important defaults:
 
 See [podman.md](podman.md) for the complete runtime flow and raw `podman run`
 examples.
-
-If the `default` router artifact becomes unacceptable, two designs are already
-identified: move shared preset defaults into the `bin/run.sh` `llama-server`
-command line, or introduce a `models.template.ini` source and generate an
-expanded temporary preset at runtime. The command-line approach is simpler but
-prevents lower-precedence per-model overrides for those keys. The template
-approach keeps override behavior but adds repo-specific preprocessing.
 
 ## Legacy Boundary
 

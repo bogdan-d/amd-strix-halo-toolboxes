@@ -17,8 +17,8 @@ Backends:
 Commands:
   shell                 Open a shell in a running selected image, or start one
   list-devices          Run llama-cli --list-devices
-  models                List model IDs from LLAMA_MODELS_PRESET
-  server [model] [...]  Run llama-server with models.ini, or one direct model
+  models                List generated model IDs, or IDs from LLAMA_MODELS_PRESET
+  server [model] [...]  Run llama-server with generated preset, or one direct model
   mtp-server <model> [draft-n] [...]
                         Run llama-server with draft MTP enabled
   load-test <model> [...] Start llama-server, wait for model load, then stop
@@ -34,7 +34,9 @@ Environment:
   ROCM_VERSION          Stable ROCm version for versioned rocm aliases. Default: 7.2.4
   MODELS_DIR            Host model directory to mount. Default: ~/models
   CONTAINER_MODELS_DIR  Container model directory. Default: /root/models
-  LLAMA_MODELS_PRESET   Host models preset file. Default: $MODELS_DIR/models.ini
+  LLAMA_MODELS_PRESET   Explicit host models preset file. Default: generated
+                        from ./models-template.ini and MODELS_DIR discovery
+  LLAMA_MODELS_TEMPLATE Host models template file. Default: ./models-template.ini
   LLAMA_MODELS_MAX      Maximum models loaded by preset server. Default: 1
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
@@ -209,7 +211,13 @@ IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
-LLAMA_MODELS_PRESET="${LLAMA_MODELS_PRESET:-$MODELS_DIR/models.ini}"
+if [[ -n "${LLAMA_MODELS_PRESET:-}" ]]; then
+  LLAMA_MODELS_PRESET_EXPLICIT=1
+else
+  LLAMA_MODELS_PRESET_EXPLICIT=0
+  LLAMA_MODELS_PRESET=""
+fi
+LLAMA_MODELS_TEMPLATE="${LLAMA_MODELS_TEMPLATE:-$PROJECT_ROOT/models-template.ini}"
 LLAMA_MODELS_MAX="${LLAMA_MODELS_MAX:-1}"
 LLAMA_PORT="${LLAMA_PORT:-8080}"
 LLAMA_CONTEXT="${LLAMA_CONTEXT:-131072}"
@@ -290,7 +298,7 @@ container_models_preset_path() {
 
   if [[ ! -f "$preset_abs" ]]; then
     echo "Models preset does not exist: $preset_abs" >&2
-    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or create $MODELS_DIR/models.ini." >&2
+    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or leave it unset for generated discovery." >&2
     exit 1
   fi
 
@@ -433,13 +441,39 @@ require_model() {
   fi
 }
 
+GENERATED_MODELS_PRESET=""
+GENERATED_MODELS_PRESET_CONTAINER="/tmp/llama-models.ini"
+
+cleanup_generated_models_preset() {
+  if [[ -n "$GENERATED_MODELS_PRESET" ]]; then
+    rm -f "$GENERATED_MODELS_PRESET"
+  fi
+}
+
+generate_models_preset_file() {
+  local output
+
+  output="$(mktemp "${TMPDIR:-/tmp}/llama-models.XXXXXX.ini")"
+  "$PROJECT_ROOT/bin/generate-models-preset.sh" \
+    "$MODELS_DIR" \
+    "$CONTAINER_MODELS_DIR" \
+    "$LLAMA_MODELS_TEMPLATE" \
+    "$output"
+
+  GENERATED_MODELS_PRESET="$output"
+  trap cleanup_generated_models_preset EXIT
+  VOLUME_ARGS+=(--volume "$GENERATED_MODELS_PRESET:$GENERATED_MODELS_PRESET_CONTAINER:ro")
+  echo "run.sh: generated models preset=$GENERATED_MODELS_PRESET from template=$LLAMA_MODELS_TEMPLATE" >&2
+}
+
 list_models_preset() {
+  local preset="$1"
   local preset_abs line section
-  preset_abs="$(realpath -m "$LLAMA_MODELS_PRESET")"
+  preset_abs="$(realpath -m "$preset")"
 
   if [[ ! -f "$preset_abs" ]]; then
     echo "Models preset does not exist: $preset_abs" >&2
-    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or create $MODELS_DIR/models.ini." >&2
+    echo "Set LLAMA_MODELS_PRESET=/path/to/models.ini or use generated discovery from $LLAMA_MODELS_TEMPLATE." >&2
     exit 1
   fi
 
@@ -449,6 +483,19 @@ list_models_preset() {
     [[ "$section" == "*" ]] && continue
     printf '%s\n' "$section"
   done < "$preset_abs"
+}
+
+list_generated_models_preset() {
+  "$PROJECT_ROOT/bin/generate-models-preset.sh" \
+    "$MODELS_DIR" \
+    "$CONTAINER_MODELS_DIR" \
+    "$LLAMA_MODELS_TEMPLATE" \
+    | while IFS= read -r line || [[ -n "$line" ]]; do
+        [[ "$line" =~ ^[[:space:]]*\[([^]]+)\][[:space:]]*$ ]] || continue
+        section="${BASH_REMATCH[1]}"
+        [[ "$section" == "*" ]] && continue
+        printf '%s\n' "$section"
+      done
 }
 
 case "$ACTION" in
@@ -463,14 +510,23 @@ case "$ACTION" in
     base_run llama-cli --list-devices
     ;;
   models)
-    list_models_preset
+    if (( LLAMA_MODELS_PRESET_EXPLICIT )); then
+      list_models_preset "$LLAMA_MODELS_PRESET"
+    else
+      list_generated_models_preset
+    fi
     ;;
   server)
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
 
     if [[ $# -eq 0 || "$1" == -* ]]; then
-      MODELS_PRESET="$(container_models_preset_path "$LLAMA_MODELS_PRESET")"
+      if (( LLAMA_MODELS_PRESET_EXPLICIT )); then
+        MODELS_PRESET="$(container_models_preset_path "$LLAMA_MODELS_PRESET")"
+      else
+        generate_models_preset_file
+        MODELS_PRESET="$GENERATED_MODELS_PRESET_CONTAINER"
+      fi
       base_run llama-server \
         --models-preset "$MODELS_PRESET" \
         --models-max "$LLAMA_MODELS_MAX" \

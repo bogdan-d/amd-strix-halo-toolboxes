@@ -33,8 +33,9 @@ bin/run.sh rocm-7.2.4 models
 bin/run.sh rocm-7.2.4 server
 ```
 
-By default, `server` loads `models/models.ini` through llama.cpp
-`--models-preset`. Clients select a model by its provider-qualified preset name.
+By default, `server` generates a temporary llama.cpp `--models-preset` from the
+tracked `models-template.ini` and the GGUF files discovered under `MODELS_DIR`.
+Clients select a model by its generated provider-qualified preset name.
 
 For a bounded model-load smoke test that stops the server automatically:
 
@@ -61,8 +62,9 @@ bin/run.sh vulkan mtp-server \
 
 The helper applies the benchmark defaults for Strix Halo to direct model runs
 and supplies backend-specific batch defaults for preset runs. Preset runs take
-the remaining defaults from `models/models.ini`: Flash Attention, `mmap` off,
-full GPU offload, 262k context with YaRN scaling from 32k, and Qwen3.6
-coding-agent sampling defaults.
+the remaining defaults from `models-template.ini`: Flash Attention, `mmap` off,
+full GPU offload, 262k context with YaRN scaling from 32k, Qwen3.6
+coding-agent sampling defaults, MTP settings for detected MTP models, and
+`:non-reasoning` variants for Qwen-derived models.
 
 See [docs-next/podman.md](docs-next/podman.md) for the full Podman workflow and raw `podman run` examples.

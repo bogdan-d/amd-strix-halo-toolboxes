@@ -60,10 +60,21 @@ Start `llama-server` with the active model preset:
 bin/run.sh rocm server
 ```
 
-The default preset is `models/models.ini`, mounted into the container as
-`/root/models/models.ini` and passed to llama.cpp as `--models-preset`.
-The active Qwen3.6 presets use 262144 context per request, `parallel = 1`, full
-`f16` KV cache, device KV offload, unified KV, context checkpoints with
+The default preset is generated on the host from the tracked
+`models-template.ini` and the GGUF files under `MODELS_DIR`. `bin/run.sh` writes
+that active preset to a temporary file, mounts it read-only into the container as
+`/tmp/llama-models.ini`, and passes it to llama.cpp as `--models-preset`; it
+does not write `models.ini` into the mounted model directory.
+
+Discovery exposes every non-`mmproj` `*.gguf` file. Generated names use
+`author/repo:quant` when the mounted path has that shape, for example
+`unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL`. A single same-directory
+`mmproj*.gguf` is paired automatically; multiple projectors are ignored with a
+warning. Paths or filenames containing `MTP` or `mtp` get the local MTP
+speculation settings. Qwen-derived models also get a `:non-reasoning` variant.
+
+The generated Qwen3.6 presets use 262144 context per request, `parallel = 1`,
+full `f16` KV cache, device KV offload, unified KV, context checkpoints with
 `cache-ram = 32768`, `image-min-tokens = 1024`, `reasoning = on`, and
 provider-qualified model names. `bin/run.sh` supplies backend-specific
 `batch-size` and `ubatch-size` values on the preset server command line so ROCm
@@ -80,22 +91,23 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-Every Qwen3.6 preset also has a `:non-reasoning` variant that uses
-`reasoning = off` and the non-thinking sampling defaults from the Unsloth
-Qwen3.6 guidance. For example:
+Every discovered Qwen/Qwen-derived preset also has a `:non-reasoning` variant
+that uses `reasoning = off` and the non-thinking sampling defaults from the
+Unsloth Qwen3.6 guidance. For example:
 
 ```json
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:non-reasoning"
 ```
 
-Use `LLAMA_MODELS_PRESET` to point at another preset under `MODELS_DIR`:
+Use `LLAMA_MODELS_PRESET` to skip generation and point at an explicit preset
+under `MODELS_DIR`:
 
 ```bash
 LLAMA_MODELS_PRESET=/var/mnt/xdata/models/models-sample-2.ini \
   bin/run.sh rocm server
 ```
 
-`models/models.ini` uses llama.cpp's documented `[*]` global section to keep
+`models-template.ini` uses llama.cpp's documented `[*]` global section to keep
 shared defaults in one place. The current server build may also expose that
 global section as a routeable `default` model. Treat that as a router artifact:
 do not request `model = "default"`, because it has no model path and fails to
@@ -109,16 +121,8 @@ In router mode, `llama-server` applies preset values in this order:
 
 `bin/run.sh` intentionally uses that precedence for backend-specific batch
 defaults. Its command-line `--batch-size` and `--ubatch-size` values override
-the shared fallback values in `models/models.ini`, letting ROCm use larger
+the shared fallback values from `models-template.ini`, letting ROCm use larger
 microbatches while keeping the preset file usable for raw/manual Vulkan runs.
-
-One alternative is worth considering if the `default` artifact becomes too
-noisy:
-
-- Keep a DRY `models.template.ini` and have the helper generate an expanded
-  temporary INI before launch. This preserves per-model override behavior and
-  avoids `default`, but adds custom preprocessing before every preset server
-  start.
 
 Check model-load without leaving a server running:
 
@@ -191,12 +195,12 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `GGML_HIP_MAX_BATCH_SIZE` ROCm | `2048` | Keeps the HIP backend batch cap aligned with the ROCm microbatch default. |
 | `-mmp 0` | enabled for bench | Benchmark mmap-off equivalent. |
 
-The active `models/models.ini` Qwen3.6 presets override the direct-run context
-baseline with the model maximum, `ctx-size = 262144`, and enable YaRN with
+The generated Qwen3.6 presets override the direct-run context baseline with the
+model maximum, `ctx-size = 262144`, and enable YaRN with
 `rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`. This
 matches Qwen-family guidance for extending beyond native 32k context; for short
-prompt latency or quality comparisons, test a separate preset without static
-YaRN. `bin/run.sh` overrides the preset file's fallback `batch-size` and
+prompt latency or quality comparisons, test a separate explicit preset without
+static YaRN. `bin/run.sh` overrides the preset file's fallback `batch-size` and
 `ubatch-size` with the backend defaults above.
 
 Override these with environment variables:
@@ -228,9 +232,10 @@ podman run --rm -it \
   --ipc=host \
   --device /dev/dri \
   -v /var/mnt/xdata/models:/root/models \
+  -v /tmp/llama-models.ini:/tmp/llama-models.ini:ro \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:vulkan \
-  llama-server --models-preset /root/models/models.ini --models-max 1 \
+  llama-server --models-preset /tmp/llama-models.ini --models-max 1 \
     --host 0.0.0.0 --port 8080 \
     --batch-size 2048 --ubatch-size 512
 ```
@@ -247,9 +252,10 @@ podman run --rm -it \
   --device /dev/kfd \
   -e GGML_HIP_MAX_BATCH_SIZE=2048 \
   -v /var/mnt/xdata/models:/root/models \
+  -v /tmp/llama-models.ini:/tmp/llama-models.ini:ro \
   -p 8080:8080 \
   localhost/amd-strix-halo-toolboxes:rocm \
-  llama-server --models-preset /root/models/models.ini --models-max 1 \
+  llama-server --models-preset /tmp/llama-models.ini --models-max 1 \
     --host 0.0.0.0 --port 8080 \
     --batch-size 4096 --ubatch-size 2048
 ```
@@ -280,6 +286,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from `models/models.ini`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
 The preset passed to `server` and the model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

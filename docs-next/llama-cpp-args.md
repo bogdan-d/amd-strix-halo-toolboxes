@@ -29,10 +29,10 @@ this order:
 
 That means command-line values passed by `bin/run.sh`, such as
 `--batch-size` and `--ubatch-size`, override the fallback values in
-`models/models.ini`. Request-time generation options from API calls can still
-override sampling defaults for that request, but load-time settings such as
-context size, batch sizes, GPU layers, device placement, and KV cache types are
-fixed when the model instance starts.
+the generated preset based on `models-template.ini`. Request-time generation
+options from API calls can still override sampling defaults for that request,
+but load-time settings such as context size, batch sizes, GPU layers, device
+placement, and KV cache types are fixed when the model instance starts.
 
 ## Strix Halo Baseline
 
