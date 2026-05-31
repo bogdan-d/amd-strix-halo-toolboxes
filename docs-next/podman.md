@@ -192,9 +192,12 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `-mmp 0` | enabled for bench | Benchmark mmap-off equivalent. |
 
 The active `models/models.ini` Qwen3.6 presets override the direct-run context
-baseline with the model maximum, `ctx-size = 262144`. `bin/run.sh` overrides
-the preset file's fallback `batch-size` and `ubatch-size` with the backend
-defaults above.
+baseline with the model maximum, `ctx-size = 262144`, and enable YaRN with
+`rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`. This
+matches Qwen-family guidance for extending beyond native 32k context; for short
+prompt latency or quality comparisons, test a separate preset without static
+YaRN. `bin/run.sh` overrides the preset file's fallback `batch-size` and
+`ubatch-size` with the backend defaults above.
 
 Override these with environment variables:
 

@@ -43,7 +43,7 @@ These are the first knobs to decide for this repo.
 | `-fa`, `--flash-attn` | Use `-fa 1` or `--flash-attn on` | Required for reliable Strix Halo runs. |
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
-| `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` | 131k is the conservative Strix Halo baseline; Qwen3.6 supports 256K and the active presets use it. |
+| `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` | 131k is the conservative Strix Halo baseline; active Qwen3.6 presets use 256k with YaRN scaling from 32k. |
 | `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation. |
 | `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan below the values that are known to crash. |
 | `-ctk`, `-ctv` | Usually leave `f16` | Quantized KV can save memory, but quality/perf tradeoffs need testing. |
@@ -116,7 +116,12 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 
 ## RoPE and Long Context
 
-Leave model defaults unless deliberately extending context.
+Leave model defaults unless deliberately extending context. The active
+Qwen3.6 presets deliberately extend from native 32k-style context to 256k with
+`rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`.
+Qwen-family guidance recommends YaRN/RoPE scaling when going beyond native
+context; static YaRN can affect short-prompt behavior, so keep a non-YaRN preset
+for short-context quality or latency comparisons.
 
 | Argument | Applies | Meaning |
 | --- | --- | --- |
