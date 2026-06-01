@@ -93,13 +93,30 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
-Every discovered Qwen/Qwen-derived preset also has a `:non-reasoning` variant
-that uses `reasoning = off` and the non-thinking sampling defaults from the
-Unsloth Qwen3.6 guidance. For example:
+Generated presets are text-only by default, even when a same-directory
+`mmproj*.gguf` file exists. Pass `--with-vision` before the backend to add
+separate `:vision` model IDs with `mmproj` wired in:
+
+```bash
+bin/run.sh --with-vision rocm models
+bin/run.sh --with-vision rocm server
+```
+
+For Qwen/Qwen-derived models, pass `--with-non-reasoning` before the backend to
+add `:non-reasoning` variants that use `reasoning = off` and the non-thinking
+sampling defaults from the Unsloth Qwen3.6 guidance. For example:
+
+```bash
+bin/run.sh --with-non-reasoning rocm models
+bin/run.sh --with-non-reasoning rocm server
+```
 
 ```json
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:non-reasoning"
 ```
+
+The flags can be combined. A Qwen vision preset then also gets a
+`:vision:non-reasoning` sibling.
 
 Use `LLAMA_MODELS_PRESET` to skip generation and point at an explicit preset
 under `MODELS_DIR`:
@@ -288,6 +305,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. Generated presets omit Qwen `:non-reasoning` variants and mmproj-backed `:vision` variants unless `bin/run.sh` is called with `--with-non-reasoning` or `--with-vision`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
 The preset passed to `server` and the model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

@@ -4,12 +4,44 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
+
+Options:
+  --with-non-reasoning  Add Qwen/Qwen-derived :non-reasoning variants.
+  --with-vision         Add :vision variants for models with one paired mmproj GGUF.
 EOF
 }
+
+WITH_NON_REASONING=0
+WITH_VISION=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-non-reasoning)
+      WITH_NON_REASONING=1
+      shift
+      ;;
+    --with-vision)
+      WITH_VISION=1
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
   usage >&2
@@ -208,15 +240,25 @@ while IFS= read -r host_file; do
   seen_ids[$id]=1
 
   model_path="$(container_path "$rel")"
-  mmproj_path="$(find_mmproj "$host_file" "$rel")"
   mtp=0
   if is_mtp_model "$rel"; then
     mtp=1
   fi
 
-  emit_model_section "$id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
-  if is_qwen_model "$rel"; then
-    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
+  emit_model_section "$id" "$model_path" "" "$mtp" >> "$tmp_output"
+  if (( WITH_NON_REASONING )) && is_qwen_model "$rel"; then
+    emit_non_reasoning_section "$id" "$model_path" "" "$mtp" >> "$tmp_output"
+  fi
+
+  if (( WITH_VISION )); then
+    mmproj_path="$(find_mmproj "$host_file" "$rel")"
+    if [[ -n "$mmproj_path" ]]; then
+      vision_id="$id:vision"
+      emit_model_section "$vision_id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
+      if (( WITH_NON_REASONING )) && is_qwen_model "$rel"; then
+        emit_non_reasoning_section "$vision_id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
+      fi
+    fi
   fi
 
   model_count=$((model_count + 1))

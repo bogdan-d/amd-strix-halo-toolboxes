@@ -4,7 +4,11 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/run.sh <backend> <command> [args...]
+  bin/run.sh [options] <backend> <command> [args...]
+
+Options:
+  --with-non-reasoning  Add generated Qwen/Qwen-derived :non-reasoning presets
+  --with-vision         Add generated :vision presets for models with mmproj GGUF
 
 Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
@@ -91,6 +95,28 @@ collect_env_names() {
 
 collect_env_names "$ENV_FILE"
 load_dotenv_defaults "$ENV_FILE"
+
+GENERATE_MODELS_PRESET_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --with-non-reasoning|--with-vision)
+      GENERATE_MODELS_PRESET_ARGS+=("$1")
+      shift
+      ;;
+    --)
+      shift
+      break
+      ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
 
 if [[ $# -lt 2 ]]; then
   usage
@@ -468,6 +494,7 @@ generate_models_preset_file() {
 
   output="$(mktemp "${TMPDIR:-/tmp}/llama-models.XXXXXX.ini")"
   "$PROJECT_ROOT/bin/generate-models-preset.sh" \
+    "${GENERATE_MODELS_PRESET_ARGS[@]}" \
     "$MODELS_DIR" \
     "$CONTAINER_MODELS_DIR" \
     "$LLAMA_MODELS_TEMPLATE" \
@@ -500,6 +527,7 @@ list_models_preset() {
 
 list_generated_models_preset() {
   "$PROJECT_ROOT/bin/generate-models-preset.sh" \
+    "${GENERATE_MODELS_PRESET_ARGS[@]}" \
     "$MODELS_DIR" \
     "$CONTAINER_MODELS_DIR" \
     "$LLAMA_MODELS_TEMPLATE" \
