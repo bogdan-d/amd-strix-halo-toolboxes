@@ -2,7 +2,7 @@
 
 This is a decision-oriented map for `llama-cli` and `llama-server` arguments.
 It is based on the generated upstream docs for `llama.cpp` `master` as checked
-on 2026-05-24:
+on 2026-06-01:
 
 - <https://github.com/ggml-org/llama.cpp/blob/master/tools/cli/README.md>
 - <https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md>
@@ -43,10 +43,10 @@ These are the first knobs to decide for this repo.
 | `-fa`, `--flash-attn` | Use `-fa 1` or `--flash-attn on` | Required for reliable Strix Halo runs. |
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
-| `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` | 131k is the conservative Strix Halo baseline; active Qwen3.6 presets use 256k with YaRN scaling from 32k. |
+| `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` total | 131k is the conservative Strix Halo baseline; with server slots, active presets treat 256k as the shared context/KV pool. |
 | `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation. |
 | `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan below the values that are known to crash. |
-| `-ctk`, `-ctv` | Usually leave `f16` | Quantized KV can save memory, but quality/perf tradeoffs need testing. |
+| `-ctk`, `-ctv` | Active presets use `q8_0` | Q8 KV roughly halves KV memory versus `f16` with low observed quality impact; keep `f16` as the comparison baseline. |
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
 
@@ -108,7 +108,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `--swa-full` | both | Use full-size sliding-window-attention cache. |
 | `--perf`, `--no-perf` | both | Enable internal performance timings. |
 | `-e`, `--escape`, `--no-escape` | both | Interpret escaped sequences in prompt input. |
-| `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. Raises KV memory. |
+| `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. In server use, `ctx-size` is the total KV/context pool and is split across slots. |
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
 | `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Number of context checkpoints. |
 | `-cpent`, `--checkpoint-every-n-tokens` | both | Prefill checkpoint interval. |
@@ -116,12 +116,14 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 
 ## RoPE and Long Context
 
-Leave model defaults unless deliberately extending context. The active
-Qwen3.6 presets deliberately extend from native 32k-style context to 256k with
-`rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`.
-Qwen-family guidance recommends YaRN/RoPE scaling when going beyond native
-context; static YaRN can affect short-prompt behavior, so keep a non-YaRN preset
-for short-context quality or latency comparisons.
+Leave model defaults unless deliberately extending context. The active presets
+keep the previous Qwen3.6 YaRN lines documented in `models-template.ini`, but
+comment them out so GGUF metadata controls RoPE by default. Re-enable
+`rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768` only for an
+explicit long-context comparison. Qwen-family guidance recommends YaRN/RoPE
+scaling when going beyond native context; static YaRN can affect short-prompt
+behavior, so keep a non-YaRN preset for short-context quality or latency
+comparisons.
 
 | Argument | Applies | Meaning |
 | --- | --- | --- |
@@ -141,8 +143,8 @@ for short-context quality or latency comparisons.
 | --- | --- | --- |
 | `-fa`, `--flash-attn` | both | Flash Attention mode. Use on Strix Halo. |
 | `-kvo`, `--kv-offload`, `--no-kv-offload` | both | Put KV cache on device when possible. Active Qwen3.6 presets use device KV offload. |
-| `-ctk`, `--cache-type-k` | both | KV key datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `f16`. |
-| `-ctv`, `--cache-type-v` | both | KV value datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `f16`. |
+| `-ctk`, `--cache-type-k` | both | KV key datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `q8_0`. |
+| `-ctv`, `--cache-type-v` | both | KV value datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `q8_0`. |
 | `-dt`, `--defrag-thold` | both | Deprecated KV defrag threshold. |
 | `--mlock` | both | Keep model pages resident in RAM. |
 | `--mmap`, `--no-mmap` | both | Memory-map model file. Use `--no-mmap` here. |
@@ -156,6 +158,33 @@ for short-context quality or latency comparisons.
 | `--cache-prompt`, `--no-cache-prompt` | server | Reuse prompt cache. |
 | `--cache-reuse` | server | Minimum chunk size for KV cache reuse. |
 | `--slot-save-path` | server | Directory for saving slot KV cache. |
+
+### Parallel Slots and Context
+
+For `llama-server`, `--parallel` is the number of request slots. It is not four
+independent full-context model instances. Current upstream docs describe
+`--parallel` as server slots, and long-running llama.cpp issue/discussion
+threads describe the practical behavior: `--ctx-size` is the total context/KV
+pool, and each slot gets roughly `ctx-size / parallel`.
+
+This repo now uses `ctx-size = 262144` and `parallel = 4` in generated presets,
+so the expected per-slot budget is about `65536` tokens. If a single request
+needs the full 262k budget, use `parallel = 1` or raise `ctx-size` by the slot
+count if memory allows. `kv-unified = on` lets slots share one KV buffer, but it
+does not make every slot a separate full-size context window.
+
+### KV Cache Quantization
+
+The upstream default for `--cache-type-k` and `--cache-type-v` is `f16`.
+`q8_0` halves KV cache memory compared with `f16` and is the least aggressive
+quantized KV setting available in normal llama.cpp builds. Community
+measurements on Qwen coder models show very small perplexity changes for
+`q8_0/q8_0`; `q4_0/q4_0` can be usable but is more likely to show quality loss
+at long context or structured-output workloads.
+
+Use `f16/f16` when validating a suspected quality or stability regression. Use
+`q8_0/q8_0` when memory headroom matters, especially with `parallel > 1`, long
+contexts, MTP, or multiple loaded router models.
 
 ## GPU and Offload
 
@@ -359,8 +388,8 @@ For this repo, the important split is:
 | `--spec-draft-p-min`, `--draft-p-min` | both | Minimum acceptance/probability threshold. |
 | `--spec-draft-ngl`, `--n-gpu-layers-draft` | both | GPU layers for draft model. |
 | `--spec-draft-device`, `--device-draft` | both | Device list for draft model. |
-| `--spec-draft-type-k`, `--cache-type-k-draft` | both | Draft KV key datatype. |
-| `--spec-draft-type-v`, `--cache-type-v-draft` | both | Draft KV value datatype. |
+| `--spec-draft-type-k`, `--cache-type-k-draft` | both | Draft/MTP KV key datatype. Upstream default is `f16`; active generated MTP presets use `q8_0`. |
+| `--spec-draft-type-v`, `--cache-type-v-draft` | both | Draft/MTP KV value datatype. Upstream default is `f16`; active generated MTP presets use `q8_0`. |
 | `--spec-draft-threads`, `--threads-draft` | both | Draft generation threads. |
 | `--spec-draft-threads-batch`, `--threads-batch-draft` | both | Draft batch threads. |
 | `--spec-draft-cpu-mask`, `--cpu-mask-draft` | both | Draft CPU affinity. |
@@ -392,6 +421,15 @@ For this repo, the important split is:
 | `--spec-ngram-size-n` | server | Removed alias. Use method-specific n-gram size. |
 | `--spec-ngram-size-m` | server | Removed alias. Use method-specific n-gram size. |
 | `--spec-ngram-min-hits` | server | Removed alias. Use method-specific min hits. |
+
+`--cache-type-k` and `--cache-type-v` configure the main model's KV cache.
+`--spec-draft-type-k` and `--spec-draft-type-v` configure only the speculative
+draft path, which includes the internal MTP draft layer when using
+`--spec-type draft-mtp` and the separate draft model when using
+`--spec-type draft-simple --model-draft ...`. They are not aliases for the main
+KV cache flags. Quantizing both to `q8_0` keeps the main and draft caches on the
+same conservative quantized setting while preserving `f16` as the upstream
+default comparison point.
 
 ## Built-In Download Presets
 

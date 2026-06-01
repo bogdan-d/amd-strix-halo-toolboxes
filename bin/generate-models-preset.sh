@@ -157,6 +157,8 @@ emit_model_section() {
   if [[ "$mtp" == "1" ]]; then
     printf 'spec-type = draft-mtp,ngram-map-k4v\n'
     printf 'spec-draft-n-max = 3\n'
+    printf 'spec-draft-type-k = q8_0\n'
+    printf 'spec-draft-type-v = q8_0\n'
     printf 'spec-ngram-map-k4v-size-n = 16\n'
     printf 'spec-ngram-map-k4v-size-m = 24\n'
     printf 'spec-ngram-map-k4v-min-hits = 2\n'

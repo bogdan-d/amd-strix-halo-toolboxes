@@ -63,8 +63,10 @@ bin/run.sh vulkan mtp-server \
 The helper applies the benchmark defaults for Strix Halo to direct model runs
 and supplies backend-specific batch defaults for preset runs. Preset runs take
 the remaining defaults from `models-template.ini`: Flash Attention, `mmap` off,
-full GPU offload, 262k context with YaRN scaling from 32k, Qwen3.6
-coding-agent sampling defaults, MTP settings for detected MTP models, and
-`:non-reasoning` variants for Qwen-derived models.
+full GPU offload, 262k total context across four server slots, q8_0 KV cache,
+Qwen3.6 coding-agent sampling defaults, MTP settings for detected MTP models,
+and `:non-reasoning` variants for Qwen-derived models. RoPE/YaRN override
+lines remain documented in `models-template.ini` for explicit long-context
+experiments, but are disabled by default.
 
 See [docs-next/podman.md](docs-next/podman.md) for the full Podman workflow and raw `podman run` examples.

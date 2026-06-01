@@ -96,9 +96,9 @@ Important defaults:
 - `models-template.ini` as the tracked source for generated llama.cpp
   `--models-preset` files;
 - provider-qualified model IDs generated from `author/repo:quant` paths;
-- Qwen3.6 max per-request context with YaRN scaling from 32k to 256k,
-  `parallel = 1`, `f16` KV cache, device KV offload, unified KV, context
-  checkpoints with `cache-ram = 32768`,
+- Qwen3.6 preset defaults with `ctx-size = 262144` as the total server context
+  pool, `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV,
+  context checkpoints with `cache-ram = 32768`,
   `image-min-tokens = 1024`, and coding-agent sampling defaults in the active
   preset;
 - `:non-reasoning` preset variants for each discovered Qwen/Qwen-derived model, using
@@ -110,8 +110,9 @@ Important defaults:
 - `-fa 1` for direct server, MTP server, CLI, and bench;
 - `--no-mmap` for direct server, MTP server, and CLI;
 - full GPU offload by default for server/CLI;
-- `262144` context for active Qwen3.6 presets, with
-  `rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`;
+- `262144` total context for active Qwen3.6 presets, with RoPE/YaRN overrides
+  documented but disabled in `models-template.ini` for explicit long-context
+  experiments;
 - `131072` context and `2048` batch as the direct-run baseline;
 - backend-specific microbatch defaults: `512` for Vulkan and `2048` for ROCm;
 - `/dev/dri` for Vulkan and `/dev/dri` plus `/dev/kfd` for ROCm;

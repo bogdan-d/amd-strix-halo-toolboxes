@@ -73,10 +73,12 @@ Discovery exposes every non-`mmproj` `*.gguf` file. Generated names use
 warning. Paths or filenames containing `MTP` or `mtp` get the local MTP
 speculation settings. Qwen-derived models also get a `:non-reasoning` variant.
 
-The generated Qwen3.6 presets use 262144 context per request, `parallel = 1`,
-full `f16` KV cache, device KV offload, unified KV, context checkpoints with
-`cache-ram = 32768`, `image-min-tokens = 1024`, `reasoning = on`, and
-provider-qualified model names. `bin/run.sh` supplies backend-specific
+The generated Qwen3.6 presets use `ctx-size = 262144` as the total server
+context pool, `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV,
+context checkpoints with `cache-ram = 32768`, `image-min-tokens = 1024`,
+`reasoning = on`, and provider-qualified model names. That means each slot gets
+about 65536 tokens before any llama.cpp auto-sizing or model-limit behavior.
+`bin/run.sh` supplies backend-specific
 `batch-size` and `ubatch-size` values on the preset server command line so ROCm
 can use larger prefill microbatches without making the shared preset unsafe for
 Vulkan. `parallel > 1` splits `ctx-size` across server slots unless `ctx-size`
