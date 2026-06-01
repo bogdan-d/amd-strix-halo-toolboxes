@@ -1,5 +1,6 @@
 .env
 /models
 .build-logs/
+coding-tool-configs/
 __pycache__
 research

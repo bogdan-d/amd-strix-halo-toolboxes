@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
@@ -12,11 +12,14 @@ tracked template and appending discovered GGUF model sections.
 Options:
   --with-non-reasoning  Add Qwen/Qwen-derived :non-reasoning variants.
   --with-vision         Add :vision variants for models with one paired mmproj GGUF.
+  --with-configs        Refresh coding-tool configs from the generated preset.
 EOF
 }
 
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WITH_NON_REASONING=0
 WITH_VISION=0
+WITH_CONFIGS=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -26,6 +29,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-vision)
       WITH_VISION=1
+      shift
+      ;;
+    --with-configs)
+      WITH_CONFIGS=1
       shift
       ;;
     --)
@@ -266,6 +273,12 @@ done < <(find -L "$MODELS_DIR" -type f -name '*.gguf' -printf '%p\n' | sort)
 
 if (( model_count == 0 )); then
   echo "generate-models-preset: warning: no non-mmproj GGUF models found under $MODELS_DIR" >&2
+fi
+
+if (( WITH_CONFIGS )); then
+  "$PROJECT_ROOT/bin/generate-coding-tool-configs.ts" \
+    --output-root "$PROJECT_ROOT/coding-tool-configs" \
+    "$tmp_output" >&2
 fi
 
 if [[ "$OUTPUT" == "/dev/stdout" ]]; then

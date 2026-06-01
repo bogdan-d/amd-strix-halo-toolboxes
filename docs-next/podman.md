@@ -143,6 +143,39 @@ defaults. Its command-line `--batch-size` and `--ubatch-size` values override
 the shared fallback values from `models-template.ini`, letting ROCm use larger
 microbatches while keeping the preset file usable for raw/manual Vulkan runs.
 
+Refresh local coding-tool configs from the same generated preset used by a
+server run:
+
+```bash
+bin/run.sh --with-non-reasoning --with-vision --with-configs rocm server
+```
+
+The same flag works when saving a generated preset directly:
+
+```bash
+bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs \
+  "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models.ini
+```
+
+The generator writes:
+
+- `coding-tool-configs/kilocode/kilo.jsonc`
+- `coding-tool-configs/opencode/opencode.jsonc`
+- `coding-tool-configs/pi/models.json`
+- `coding-tool-configs/vscode/chatLanguageModels.json`
+
+It reads model IDs and inherited `ctx-size` / `parallel` values from the
+llama.cpp preset, then reports the per-slot context as
+`floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
+suffix advertise image input; other sections stay text-only. `reasoning = off`
+sections are emitted as non-thinking/non-reasoning models. The default output
+budget is `32768`, which matches the Qwen3.6 guidance used by this repo, but
+per-slot contexts below `100000` tokens are capped to `16384` output tokens.
+Override the normal output budget with `--max-output-tokens` if a later model
+card or local run needs a different limit. For VS Code only, the script emits
+`maxInputTokens` as `per-slot context - maxOutputTokens` because that IDE treats
+the two fields as the full model context when added together.
+
 Check model-load without leaving a server running:
 
 ```bash

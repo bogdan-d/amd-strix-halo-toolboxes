@@ -9,6 +9,7 @@ Usage:
 Options:
   --with-non-reasoning  Add generated Qwen/Qwen-derived :non-reasoning presets
   --with-vision         Add generated :vision presets for models with mmproj GGUF
+  --with-configs        Refresh coding-tool configs from the generated preset
 
 Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
@@ -99,7 +100,7 @@ load_dotenv_defaults "$ENV_FILE"
 GENERATE_MODELS_PRESET_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --with-non-reasoning|--with-vision)
+    --with-non-reasoning|--with-vision|--with-configs)
       GENERATE_MODELS_PRESET_ARGS+=("$1")
       shift
       ;;

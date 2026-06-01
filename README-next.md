@@ -37,6 +37,16 @@ By default, `server` generates a temporary llama.cpp `--models-preset` from the
 tracked `models-template.ini` and the GGUF files discovered under `MODELS_DIR`.
 Clients select a model by its generated provider-qualified preset name.
 
+Generate local coding-tool configs while saving a preset with:
+
+```bash
+bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs \
+  "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models.ini
+```
+
+This writes Kilo Code, OpenCode, Pi, and VS Code config files under
+`coding-tool-configs/`.
+
 For a bounded model-load smoke test that stops the server automatically:
 
 ```bash
