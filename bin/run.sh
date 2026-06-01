@@ -71,6 +71,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$PROJECT_ROOT/bin/env-defaults.sh"
 ENV_FILE="$PROJECT_ROOT/.env"
 ENV_NAMES=()
+declare -A ENV_NAME_SEEN=()
 
 collect_env_names() {
   local env_file="$1"
@@ -82,6 +83,8 @@ collect_env_names() {
     [[ "$line" =~ ^[[:space:]]*(#|$) ]] && continue
     [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)= ]] || continue
     name="${BASH_REMATCH[2]}"
+    [[ -n "${ENV_NAME_SEEN[$name]+x}" ]] && continue
+    ENV_NAME_SEEN["$name"]=1
     ENV_NAMES+=("$name")
   done < "$env_file"
 }
@@ -248,6 +251,16 @@ fi
 
 ENV_ARGS=()
 for name in "${ENV_NAMES[@]}"; do
+  case "$name" in
+    HF_HOME)
+      continue
+      ;;
+    GGML_HIP_MAX_BATCH_SIZE)
+      if [[ "$BACKEND_FAMILY" == rocm* ]]; then
+        continue
+      fi
+      ;;
+  esac
   ENV_ARGS+=(--env "$name")
 done
 if [[ "$BACKEND_FAMILY" == rocm* ]]; then
