@@ -280,7 +280,7 @@ function displayNameForModel(id: string): string {
   if (/\bA[0-9]+B\b/i.test(name) || /\bMOE\b/i.test(name)) {
     tags.add("MOE");
   }
-  if (/\bMTP\b/i.test(id)) {
+  if (featureSuffixes.includes("mtp")) {
     tags.add("MTP");
   }
   if (/huihui|abliterated|uncensored/i.test(id)) {

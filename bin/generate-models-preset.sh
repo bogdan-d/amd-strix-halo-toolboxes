@@ -217,6 +217,19 @@ emit_non_reasoning_section() {
   printf 'presence-penalty = 1.5\n'
 }
 
+emit_model_variants() {
+  local id="$1"
+  local model_path="$2"
+  local mmproj_path="$3"
+  local mtp="$4"
+  local qwen="$5"
+
+  emit_model_section "$id" "$model_path" "$mmproj_path" "$mtp"
+  if (( WITH_NON_REASONING )) && (( qwen )); then
+    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp"
+  fi
+}
+
 MODELS_DIR="$(trim_trailing_slash "$MODELS_DIR")"
 CONTAINER_MODELS_DIR="$(trim_trailing_slash "$CONTAINER_MODELS_DIR")"
 
@@ -251,19 +264,23 @@ while IFS= read -r host_file; do
   if is_mtp_model "$rel"; then
     mtp=1
   fi
+  qwen=0
+  if is_qwen_model "$rel"; then
+    qwen=1
+  fi
 
-  emit_model_section "$id" "$model_path" "" "$mtp" >> "$tmp_output"
-  if (( WITH_NON_REASONING )) && is_qwen_model "$rel"; then
-    emit_non_reasoning_section "$id" "$model_path" "" "$mtp" >> "$tmp_output"
+  emit_model_variants "$id" "$model_path" "" 0 "$qwen" >> "$tmp_output"
+  if (( mtp )); then
+    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" >> "$tmp_output"
   fi
 
   if (( WITH_VISION )); then
     mmproj_path="$(find_mmproj "$host_file" "$rel")"
     if [[ -n "$mmproj_path" ]]; then
       vision_id="$id:vision"
-      emit_model_section "$vision_id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
-      if (( WITH_NON_REASONING )) && is_qwen_model "$rel"; then
-        emit_non_reasoning_section "$vision_id" "$model_path" "$mmproj_path" "$mtp" >> "$tmp_output"
+      emit_model_variants "$vision_id" "$model_path" "$mmproj_path" 0 "$qwen" >> "$tmp_output"
+      if (( mtp )); then
+        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" >> "$tmp_output"
       fi
     fi
   fi

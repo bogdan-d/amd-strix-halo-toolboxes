@@ -100,6 +100,14 @@ curl http://127.0.0.1:8080/v1/chat/completions \
   }'
 ```
 
+When a model path or filename contains `MTP`/`mtp`, generated presets include a
+plain non-speculative route and a separate `:mtp` route with draft-MTP
+speculation enabled:
+
+```json
+"model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:mtp"
+```
+
 Generated presets are text-only by default, even when a same-directory
 `mmproj*.gguf` file exists. Pass `--with-vision` before the backend to add
 separate `:vision` model IDs with `mmproj` wired in:
@@ -122,8 +130,9 @@ bin/run.sh --with-non-reasoning rocm server
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:non-reasoning"
 ```
 
-The flags can be combined. A Qwen vision preset then also gets a
-`:vision:non-reasoning` sibling.
+The flags can be combined. A Qwen vision preset then also gets
+`:vision:non-reasoning`, and an MTP-capable Qwen vision preset gets
+`:vision:mtp` and `:vision:mtp:non-reasoning` siblings.
 
 Use `LLAMA_MODELS_PRESET` to skip generation and point at an explicit preset
 under `MODELS_DIR`:
@@ -175,7 +184,8 @@ It reads model IDs and inherited `ctx-size` / `parallel` values from the
 llama.cpp preset, then reports the per-slot context as
 `floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
 suffix advertise image input; other sections stay text-only. `reasoning = off`
-sections are emitted as non-thinking/non-reasoning models. The default output
+sections are emitted as non-thinking/non-reasoning models, and explicit `:mtp`
+sections are tagged as MTP models. The default output
 budget is `32768`, which matches the Qwen3.6 guidance used by this repo, but
 per-slot contexts below `100000` tokens are capped to `16384` output tokens.
 Override the normal output budget with `--max-output-tokens` if a later model
