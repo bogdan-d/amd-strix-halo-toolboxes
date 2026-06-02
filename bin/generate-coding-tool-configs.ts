@@ -367,7 +367,6 @@ function buildKiloConfig(models: ModelInfo[], baseUrl: string) {
 function buildOpencodeConfig(models: ModelInfo[], baseUrl: string) {
   const config = buildKiloConfig(models, baseUrl);
   config.$schema = "https://opencode.ai/config.json";
-  config.provider["llama-cpp"].name = "llama-server (local)";
   return config;
 }
 
