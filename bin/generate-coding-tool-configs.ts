@@ -332,8 +332,8 @@ function textInput(vision: boolean): string[] {
 }
 
 function buildKiloConfig(models: ModelInfo[], baseUrl: string) {
+  // Schema reference: https://app.kilo.ai/config.json
   return {
-    $schema: "https://app.kilo.ai/config.json",
     provider: {
       "llama-cpp": {
         name: "Local LLama.cpp",
@@ -365,9 +365,8 @@ function buildKiloConfig(models: ModelInfo[], baseUrl: string) {
 }
 
 function buildOpencodeConfig(models: ModelInfo[], baseUrl: string) {
-  const config = buildKiloConfig(models, baseUrl);
-  config.$schema = "https://opencode.ai/config.json";
-  return config;
+  // Schema reference: https://opencode.ai/config.json
+  return buildKiloConfig(models, baseUrl);
 }
 
 function buildPiConfig(models: ModelInfo[], baseUrl: string) {

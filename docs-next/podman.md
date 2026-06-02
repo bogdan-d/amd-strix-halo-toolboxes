@@ -180,6 +180,18 @@ The generator writes:
 - `coding-tool-configs/pi/models.json`
 - `coding-tool-configs/vscode/chatLanguageModels.json`
 
+Apply those generated configs to existing user config files manually with:
+
+```bash
+bin/update-user-configs.ts
+```
+
+The copy script skips tools whose user config file does not already exist. It
+updates VS Code, VS Code Insiders, Pi, Kilo Code, and OpenCode configs; for
+OpenCode it prefers `~/.config/opencode/opencode.jsonc`, then falls back to
+`~/.config/opencode/opencode.json`. Use `--base-home <dir>` to test against a
+temporary home-shaped directory without touching real user configs.
+
 It reads model IDs and inherited `ctx-size` / `parallel` values from the
 llama.cpp preset, then reports the per-slot context as
 `floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
