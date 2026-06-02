@@ -268,13 +268,17 @@ function displayNameForModel(id: string): string {
   const quant = suffixes.find((suffix) => /^(UD-)?(IQ|TQ|Q|BF16|F16|F32|MXFP)/i.test(suffix));
   const featureSuffixes = suffixes.filter((suffix) => suffix !== quant);
 
-  let name = repo
+  const normalizedRepo = repo
     .replace(/-?GGUF$/i, "")
     .replace(/^Huihui-/i, "")
     .replace(/-Claude-[0-9.]+-Opus/i, "")
     .replace(/-abliterated/i, "")
     .replace(/-UD-/g, "-")
     .replace(/-Q[0-9]+_[A-Za-z0-9_]+$/i, "");
+  const baseName = normalizedRepo.match(
+    /(?:^|[-_])((?:[A-Z][A-Za-z0-9]*|[a-z][a-z0-9]*)[A-Za-z0-9.]*-[0-9]+(?:\.[0-9]+)?B(?:-[A-Z][0-9]+B)?)/,
+  )?.[1];
+  let name = baseName ?? normalizedRepo;
 
   const tags = new Set<string>();
   if (/\bA[0-9]+B\b/i.test(name) || /\bMOE\b/i.test(name)) {
