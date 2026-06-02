@@ -75,14 +75,21 @@ speculation settings. Qwen-derived models also get a `:non-reasoning` variant.
 
 The generated Qwen3.6 presets use `ctx-size = 262144` as the total server
 context pool, `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV,
-context checkpoints with `cache-ram = 32768`, `image-min-tokens = 1024`,
-`reasoning = on`, and provider-qualified model names. That means each slot gets
-about 65536 tokens before any llama.cpp auto-sizing or model-limit behavior.
+`ctx-checkpoints = 32`, `checkpoint-min-step = 256`, prompt caching with
+`cache-ram = 32768`, `image-min-tokens = 1024`, `reasoning = on`, and
+provider-qualified model names. That means each slot gets about 65536 tokens
+before any llama.cpp auto-sizing or model-limit behavior.
 `bin/run.sh` supplies backend-specific
 `batch-size` and `ubatch-size` values on the preset server command line so ROCm
 can use larger prefill microbatches without making the shared preset unsafe for
 Vulkan. `parallel > 1` splits `ctx-size` across server slots unless `ctx-size`
 is raised accordingly. Clients select models by preset name:
+
+The current image accepts `--checkpoint-min-step` and rejects the older
+`--checkpoint-every-n-tokens` flag. The checkpoint defaults are tuned for
+agentic 4-slot runs where the first full prompt prefill per slot is unavoidable,
+but follow-up turns should restore from checkpoints rather than replaying the
+same long prompt.
 
 ```bash
 curl http://127.0.0.1:8080/v1/chat/completions \

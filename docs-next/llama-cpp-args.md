@@ -110,9 +110,15 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-e`, `--escape`, `--no-escape` | both | Interpret escaped sequences in prompt input. |
 | `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. In server use, `ctx-size` is the total KV/context pool and is split across slots. |
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
-| `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Number of context checkpoints. |
-| `-cpent`, `--checkpoint-every-n-tokens` | both | Prefill checkpoint interval. |
-| `-cram`, `--cache-ram` | both | RAM limit for context/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
+| `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Maximum context checkpoints per slot. Active Qwen3.6 presets use `32` to avoid repeated full prompt re-processing in 4-slot agent runs. |
+| `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Current image default is `256`; active presets set `256` explicitly. |
+| `-cram`, `--cache-ram` | both | RAM limit for prompt/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
+
+The current Vulkan image was tested with `llama-server --help`: it accepts
+`--checkpoint-min-step 256` and rejects the older
+`--checkpoint-every-n-tokens` spelling. Older llama.cpp builds documented
+`--checkpoint-every-n-tokens` with a default around `8192`, so check the active
+image before carrying presets between builds.
 
 ## RoPE and Long Context
 
@@ -143,8 +149,8 @@ comparisons.
 | --- | --- | --- |
 | `-fa`, `--flash-attn` | both | Flash Attention mode. Use on Strix Halo. |
 | `-kvo`, `--kv-offload`, `--no-kv-offload` | both | Put KV cache on device when possible. Active Qwen3.6 presets use device KV offload. |
-| `-ctk`, `--cache-type-k` | both | KV key datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `q8_0`. |
-| `-ctv`, `--cache-type-v` | both | KV value datatype. Common values include `f16`, `bf16`, `q8_0`, and `q4_0`; active Qwen3.6 presets use `q8_0`. |
+| `-ctk`, `--cache-type-k` | both | KV key datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `q8_0`. |
+| `-ctv`, `--cache-type-v` | both | KV value datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `q8_0`. |
 | `-dt`, `--defrag-thold` | both | Deprecated KV defrag threshold. |
 | `--mlock` | both | Keep model pages resident in RAM. |
 | `--mmap`, `--no-mmap` | both | Memory-map model file. Use `--no-mmap` here. |
@@ -185,6 +191,23 @@ at long context or structured-output workloads.
 Use `f16/f16` when validating a suspected quality or stability regression. Use
 `q8_0/q8_0` when memory headroom matters, especially with `parallel > 1`, long
 contexts, MTP, or multiple loaded router models.
+
+### Context Checkpoints
+
+Context checkpoints are restore points for prompt/cache reuse. They matter most
+for SWA or hybrid-memory models where llama.cpp cannot always reconstruct an
+earlier branch point from only the current KV/cache state. Too few checkpoints
+can produce log lines such as `forcing full prompt re-processing due to lack of
+cache data`, followed by another full prompt prefill.
+
+For the local VS Code agent harness, the unavoidable first pass is four large
+prefills: the main agent plus three subagents each receive full instructions and
+context. The checkpoint goal is not to remove those first prefills; it is to
+keep follow-up and branched turns from replaying the same 20k+ token prompt.
+Local testing showed `ctx-checkpoints = 4` eliminated the observed forced full
+reprocesses after the original `ctx-checkpoints = 1`; the active preset now uses
+`ctx-checkpoints = 32` because the Strix Halo setup has enough unified memory to
+keep more restore points.
 
 ## GPU and Offload
 
