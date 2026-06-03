@@ -310,17 +310,42 @@ function displayNameForModel(id: string): string {
   return `${[name, tagText].filter(Boolean).join(" ")}${authorText}`;
 }
 
+function modelIdForSection(section: IniSection, aliasCounts: Map<string, number>): string {
+  const alias = section.values.alias?.trim();
+  if (alias === undefined || alias === "" || aliasCounts.get(alias) !== 1) {
+    return section.name;
+  }
+
+  return alias;
+}
+
+function countAliases(sections: IniSection[]): Map<string, number> {
+  const counts = new Map<string, number>();
+
+  sections.forEach((section) => {
+    const alias = section.values.alias?.trim();
+    if (alias === undefined || alias === "") {
+      return;
+    }
+    counts.set(alias, (counts.get(alias) ?? 0) + 1);
+  });
+
+  return counts;
+}
+
 function modelInfoFromSections(sections: IniSection[], options: Options): ModelInfo[] {
   const globalValues = sections.find((section) => section.name === "*")?.values ?? {};
   const modelSections = sections.filter((section) => section.name !== "*" && section.values.model !== undefined);
+  const aliasCounts = countAliases(modelSections);
 
-  return modelSections.map((section) => {
+  const models = modelSections.map((section) => {
     const contextWindow = effectiveContextWindow(section, globalValues, options.defaultContext);
     const maxOutputTokens = effectiveMaxOutputTokens(section, globalValues, options.maxOutputTokens, contextWindow);
+    const id = modelIdForSection(section, aliasCounts);
 
     return {
-      id: section.name,
-      name: displayNameForModel(section.name),
+      id,
+      name: displayNameForModel(id),
       contextWindow,
       maxOutputTokens,
       maxInputTokens: contextWindow - maxOutputTokens,
@@ -329,6 +354,16 @@ function modelInfoFromSections(sections: IniSection[], options: Options): ModelI
       vision: section.values.mmproj !== undefined || section.name.split(":").includes("vision"),
     };
   });
+
+  const seenIds = new Set<string>();
+  models.forEach((model) => {
+    if (seenIds.has(model.id)) {
+      throw new Error(`Duplicate generated coding-tool model id: ${model.id}`);
+    }
+    seenIds.add(model.id);
+  });
+
+  return models;
 }
 
 function textInput(vision: boolean): string[] {

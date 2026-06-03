@@ -50,6 +50,14 @@ These are the first knobs to decide for this repo.
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
 
+The generated `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` routes are a
+model-card exception to the shared defaults: they keep `ctx-size = 131072`,
+`parallel = 1`, `split-mode = row`, `cache-type-k/v = f16`,
+`spec-draft-type-k/v = f16`, `spec-draft-n-max = 4`, the Strix polling flags,
+and `batch-size = 2048` / `ubatch-size = 512` directly in the model sections.
+The generator always emits both reasoning-on and reasoning-off MTP routes for
+that model.
+
 ## Mental Model
 
 Most flags fall into these decisions:
@@ -398,6 +406,9 @@ For this repo, the important split is:
 - MTP plus n-gram map: `--spec-type draft-mtp --spec-draft-n-max N --spec-type ngram-map-k4v --spec-ngram-map-k4v-size-n 16 --spec-ngram-map-k4v-size-m 24 --spec-ngram-map-k4v-min-hits 2`
 - Draft model: `--spec-type draft-simple --model-draft path`
 - N-gram: `--spec-type ngram-*`
+
+The Crown Halo dynamic MTP preset uses pure native MTP from the model card,
+without the repo's generic n-gram sidecar settings.
 
 | Argument | Applies | Meaning |
 | --- | --- | --- |

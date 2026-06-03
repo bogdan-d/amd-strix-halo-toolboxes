@@ -108,6 +108,16 @@ speculation enabled:
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:mtp"
 ```
 
+`jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
+MTP profile. The generator always emits exactly two routes for it, regardless
+of `--with-non-reasoning`: `:mtp` with reasoning enabled and
+`:mtp:non-reasoning` with reasoning disabled. Both routes keep the model-card
+profile in the model section itself: 131072 context, row split, `f16/f16` main
+and draft KV, `draft-mtp` depth 4, single-slot serving, Strix polling, and
+`b2048/u512`. The reasoning-off route uses the author-facing
+`crown-dynamic-mtp` alias; the reasoning-on route uses
+`crown-dynamic-mtp-reasoning` so the router can load both presets.
+
 Generated presets are text-only by default, even when a same-directory
 `mmproj*.gguf` file exists. Pass `--with-vision` before the backend to add
 separate `:vision` model IDs with `mmproj` wired in:
@@ -193,7 +203,8 @@ OpenCode it prefers `~/.config/opencode/opencode.jsonc`, then falls back to
 temporary home-shaped directory without touching real user configs.
 
 It reads model IDs and inherited `ctx-size` / `parallel` values from the
-llama.cpp preset, then reports the per-slot context as
+llama.cpp preset, prefers a section's `alias` as the client-facing model ID
+when present, then reports the per-slot context as
 `floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
 suffix advertise image input; other sections stay text-only. `reasoning = off`
 sections are emitted as non-thinking/non-reasoning models, and explicit `:mtp`
@@ -276,13 +287,12 @@ The helper applies the defaults used by the benchmark scripts for this iGPU:
 | `GGML_HIP_MAX_BATCH_SIZE` ROCm | `2048` | Keeps the HIP backend batch cap aligned with the ROCm microbatch default. |
 | `-mmp 0` | enabled for bench | Benchmark mmap-off equivalent. |
 
-The generated Qwen3.6 presets override the direct-run context baseline with the
-model maximum, `ctx-size = 262144`, and enable YaRN with
-`rope-scaling = yarn`, `rope-scale = 8`, and `yarn-orig-ctx = 32768`. This
-matches Qwen-family guidance for extending beyond native 32k context; for short
-prompt latency or quality comparisons, test a separate explicit preset without
-static YaRN. `bin/run.sh` overrides the preset file's fallback `batch-size` and
-`ubatch-size` with the backend defaults above.
+Generated presets inherit the shared `models-template.ini` context and RoPE
+defaults unless a model-specific route overrides them. The Crown Halo dynamic
+MTP route overrides the direct-run context baseline with the model-card
+recommendation, `ctx-size = 131072`, and keeps `batch-size = 2048` /
+`ubatch-size = 512` in the model section so router runs match the Vulkan MTP
+profile even when `bin/run.sh` would normally pass backend batch defaults.
 
 Override these with environment variables:
 

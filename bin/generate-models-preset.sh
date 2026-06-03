@@ -182,6 +182,12 @@ is_mtp_model() {
   [[ "$rel" =~ MTP || "$rel" =~ mtp ]]
 }
 
+is_crown_halo_mtp_dynamic_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Qq]wen3\.6-35[Bb]-[Aa]3[Bb].*[Hh]alo[Ss]trix-[Dd]yn-[Mm][Tt][Pp]-v7 ]] ||
+    [[ "$rel" =~ qwen3\.6-35b-a3b-crown-halo-mtp-dynamic ]]
+}
+
 emit_model_section() {
   local id="$1"
   local model_path="$2"
@@ -202,6 +208,55 @@ emit_model_section() {
     printf 'spec-ngram-map-k4v-size-m = 24\n'
     printf 'spec-ngram-map-k4v-min-hits = 2\n'
   fi
+}
+
+emit_crown_halo_mtp_dynamic_section() {
+  local id="$1"
+  local model_path="$2"
+  local reasoning="$3"
+  local alias="$4"
+
+  emit_model_section "$id" "$model_path" "" 0
+  printf 'alias = %s\n' "$alias"
+  printf 'ctx-size = 131072\n'
+  printf 'reasoning = %s\n' "$reasoning"
+  if [[ "$reasoning" == "off" ]]; then
+    printf 'reasoning-format = none\n'
+  fi
+  printf 'reasoning-budget = -1\n'
+  printf 'context-shift = off\n'
+  printf 'split-mode = row\n'
+  printf 'n-gpu-layers = 999\n'
+  printf 'flash-attn = on\n'
+  printf 'batch-size = 2048\n'
+  printf 'ubatch-size = 512\n'
+  printf 'threads = 16\n'
+  printf 'cache-type-k = f16\n'
+  printf 'cache-type-v = f16\n'
+  printf 'spec-type = draft-mtp\n'
+  printf 'spec-draft-n-max = 4\n'
+  printf 'spec-draft-type-k = f16\n'
+  printf 'spec-draft-type-v = f16\n'
+  printf 'parallel = 1\n'
+  printf 'metrics = true\n'
+  printf 'no-mmproj = true\n'
+  printf 'poll = 100\n'
+  printf 'poll-batch = 1\n'
+  printf 'spec-draft-poll = 1\n'
+  printf 'spec-draft-poll-batch = 1\n'
+  printf 'temp = 0.6\n'
+  printf 'min-p = 0.0\n'
+  printf 'top-p = 0.95\n'
+  printf 'top-k = 20\n'
+  printf 'repeat-penalty = 1.0\n'
+}
+
+emit_crown_halo_mtp_dynamic_variants() {
+  local id="$1"
+  local model_path="$2"
+
+  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on crown-dynamic-mtp-reasoning
+  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off crown-dynamic-mtp
 }
 
 emit_non_reasoning_section() {
@@ -267,6 +322,12 @@ while IFS= read -r host_file; do
   qwen=0
   if is_qwen_model "$rel"; then
     qwen=1
+  fi
+
+  if is_crown_halo_mtp_dynamic_model "$rel"; then
+    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" >> "$tmp_output"
+    model_count=$((model_count + 1))
+    continue
   fi
 
   emit_model_variants "$id" "$model_path" "" 0 "$qwen" >> "$tmp_output"
