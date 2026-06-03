@@ -55,12 +55,13 @@ bin/run.sh rocm-7.2.4 load-test \
 ```
 
 Supported backend names include logical aliases such as `vulkan`, `rocm`,
-`rocm-7.2.4`, `rocm-next`, and `rocm7-nightlies`, plus explicit build tags from
-`bin/build.sh` such as `vulkan-strix-halo`, `rocm-strix-halo`,
-`rocm-7.2.4-strix-halo`, and `rocm-next-native`. When `CPU_TARGET` is not
+`rocm-7.2.4`, `rocm-next`, `rocm7-nightlies`, and the explicit experimental
+`rocmfp4-llama` fork target, plus explicit build tags from `bin/build.sh` such
+as `vulkan-strix-halo`, `rocm-strix-halo`, `rocm-7.2.4-strix-halo`,
+`rocm-next-native`, and `rocmfp4-llama-strix-halo`. When `CPU_TARGET` is not
 `generic`, `bin/run.sh rocm ...`, `bin/run.sh rocm-7.2.4 ...`,
-`bin/run.sh rocm-next ...`, and `bin/run.sh vulkan ...` resolve to the matching
-CPU-target tag automatically.
+`bin/run.sh rocm-next ...`, `bin/run.sh rocmfp4-llama ...`, and
+`bin/run.sh vulkan ...` resolve to the matching CPU-target tag automatically.
 
 For MTP builds:
 

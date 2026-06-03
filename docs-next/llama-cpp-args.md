@@ -44,8 +44,8 @@ These are the first knobs to decide for this repo.
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
 | `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` total | 131k is the conservative Strix Halo baseline; with server slots, active presets treat 256k as the shared context/KV pool. |
-| `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation. |
-| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan below the values that are known to crash. |
+| `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096`; ROCmFP4: `512` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation; the custom ROCmFP4 profile follows its model card. |
+| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048`; ROCmFP4: `512` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan and the custom ROCmFP4 profile at their tested values. |
 | `-ctk`, `-ctv` | Active presets use `q8_0` | Q8 KV roughly halves KV memory versus `f16` with low observed quality impact; keep `f16` as the comparison baseline. |
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
@@ -57,6 +57,16 @@ model-card exception to the shared defaults: they keep `ctx-size = 131072`,
 and `batch-size = 2048` / `ubatch-size = 512` directly in the model sections.
 The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model.
+
+The generated `jcbtc/chadrock-35b-ace-saber-rocmfp4-mtp` routes are another
+exception and require the `rocmfp4-llama` image, not stock llama.cpp. They keep
+the author profile in the model sections: `ctx-size = 262144`, `parallel = 1`,
+`device = ROCm0`, `batch-size = 512`, `ubatch-size = 512`, `threads = 16`,
+`threads-batch = 32`, `cache-type-k/v = q8_0`, `spec-type = draft-mtp`,
+`spec-draft-type-k/v = q4_0`, `spec-draft-n-max = 3`,
+`spec-draft-p-split = 0.10`, metrics enabled, and `mmap = off`. `bin/run.sh`
+sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` and
+`GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for that backend.
 
 ## Mental Model
 
@@ -111,7 +121,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-n`, `--predict`, `--n-predict` | both | Max generated tokens. `-1` means unbounded. |
 | `-b`, `--batch-size` | both | Logical max batch. Affects prompt throughput and memory. |
 | `-ub`, `--ubatch-size` | both | Physical microbatch. Critical perf/memory knob. |
-| `GGML_HIP_MAX_BATCH_SIZE` | ROCm env | HIP backend batch cap. This repo sets it to `2048` for ROCm/ROCm-next helper runs unless overridden. |
+| `GGML_HIP_MAX_BATCH_SIZE` | ROCm env | HIP backend batch cap. This repo sets it to `2048` for ROCm/ROCm-next/ROCmFP4 helper runs unless overridden. |
 | `--keep` | both | Tokens kept when context shifts. |
 | `--swa-full` | both | Use full-size sliding-window-attention cache. |
 | `--perf`, `--no-perf` | both | Enable internal performance timings. |

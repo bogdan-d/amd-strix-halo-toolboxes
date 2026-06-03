@@ -14,10 +14,12 @@ Options:
 Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
   rocm-next  ROCm nightly image resolved from CPU_TARGET
+  rocmfp4-llama
+             ROCm nightly image with the custom ROCmFP4 llama.cpp fork
   vulkan     Vulkan RADV image resolved from CPU_TARGET
   Explicit build tags from bin/build.sh also work, for example:
              rocm-7.2.4, rocm-strix-halo, rocm-next-strix-halo,
-             rocm7-nightlies-native, vulkan-native
+             rocmfp4-llama-strix-halo, rocm7-nightlies-native, vulkan-native
 
 Commands:
   shell                 Open a shell in a running selected image, or start one
@@ -45,8 +47,10 @@ Environment:
   LLAMA_MODELS_MAX      Maximum models loaded by preset server. Default: 1
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
-  LLAMA_BATCH           Default logical batch size. Vulkan: 2048, ROCm: 4096
-  LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048
+  LLAMA_BATCH           Default logical batch size. Vulkan: 2048, ROCm: 4096,
+                        ROCmFP4: 512
+  LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048,
+                        ROCmFP4: 512
   GGML_HIP_MAX_BATCH_SIZE
                         ROCm HIP batch cap. Default for ROCm: 2048
   LLAMA_NGL             GPU layers to offload. Default: 999
@@ -160,6 +164,10 @@ rocm_next_alias_tag() {
   printf 'rocm7-nightlies%s' "$(cpu_target_suffix)"
 }
 
+rocmfp4_llama_tag() {
+  printf 'rocmfp4-llama%s' "$(cpu_target_suffix)"
+}
+
 vulkan_tag() {
   printf 'vulkan%s' "$(cpu_target_suffix)"
 }
@@ -209,6 +217,20 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
+  rocmfp4-llama)
+    BACKEND_FAMILY="rocmfp4-llama"
+    IMAGE_TAG="$(rocmfp4_llama_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
+  rocmfp4-llama-*)
+    BACKEND_FAMILY="rocmfp4-llama"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
   rocm)
     BACKEND_FAMILY="rocm"
     IMAGE_TAG="$(stable_rocm_tag)"
@@ -238,6 +260,12 @@ case "$BACKEND_INPUT" in
 esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
+
+if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+  GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-only)
+  HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"
+  GGML_HIP_ENABLE_UNIFIED_MEMORY="${GGML_HIP_ENABLE_UNIFIED_MEMORY:-1}"
+fi
 
 MODELS_DIR="${MODELS_DIR:-$HOME/models}"
 CONTAINER_MODELS_DIR="${CONTAINER_MODELS_DIR:-/root/models}"
@@ -282,6 +310,11 @@ for name in "${ENV_NAMES[@]}"; do
     HF_HOME)
       continue
       ;;
+    HSA_OVERRIDE_GFX_VERSION|GGML_HIP_ENABLE_UNIFIED_MEMORY)
+      if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+        continue
+      fi
+      ;;
     GGML_HIP_MAX_BATCH_SIZE)
       if [[ "$BACKEND_FAMILY" == rocm* ]]; then
         continue
@@ -293,6 +326,12 @@ done
 if [[ "$BACKEND_FAMILY" == rocm* ]]; then
   GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
   ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
+fi
+if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+  ENV_ARGS+=(
+    --env "HSA_OVERRIDE_GFX_VERSION=$HSA_OVERRIDE_GFX_VERSION"
+    --env "GGML_HIP_ENABLE_UNIFIED_MEMORY=$GGML_HIP_ENABLE_UNIFIED_MEMORY"
+  )
 fi
 
 container_model_path() {

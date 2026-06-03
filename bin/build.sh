@@ -4,14 +4,25 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan]...
+  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|rocmfp4-llama|vulkan]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
   IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
   CONTAINERFILE      Containerfile path. Default: containers/Containerfile
   ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.4
+  LLAMA_REPO         llama.cpp repository for stock backends.
+                     Default: https://github.com/ggml-org/llama.cpp.git
+  LLAMA_BRANCH       llama.cpp branch for stock backends. Default: master
   LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
+  ROCMFP4_LLAMA_REPO
+                     llama.cpp fork for rocmfp4-llama.
+                     Default: https://github.com/charlie12345/rocmfp4-llama.git
+  ROCMFP4_LLAMA_BRANCH
+                     llama.cpp fork branch for rocmfp4-llama.
+                     Default: mtp-rocmfp4-strix
+  ROCMFP4_LLAMA_REF  llama.cpp fork ref for rocmfp4-llama.
+                     Default: a00689039fb26b8ae91e0425b7416bb04f7f15bb
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
@@ -30,6 +41,7 @@ Examples:
   bin/build.sh rocm
   bin/build.sh rocm=7.2.4
   bin/build.sh rocm-next
+  bin/build.sh rocmfp4-llama
   bin/build.sh vulkan
   bin/build.sh --no-cache rocm rocm-next
   bin/build.sh --with-rocwmma rocm rocm-next
@@ -45,7 +57,12 @@ BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
+LLAMA_REPO="${LLAMA_REPO:-https://github.com/ggml-org/llama.cpp.git}"
+LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
 LLAMA_REF="${LLAMA_REF:-}"
+ROCMFP4_LLAMA_REPO="${ROCMFP4_LLAMA_REPO:-https://github.com/charlie12345/rocmfp4-llama.git}"
+ROCMFP4_LLAMA_BRANCH="${ROCMFP4_LLAMA_BRANCH:-mtp-rocmfp4-strix}"
+ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-a00689039fb26b8ae91e0425b7416bb04f7f15bb}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
 TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
@@ -94,7 +111,7 @@ for target in "$@"; do
     all)
       TARGETS+=(rocm rocm-next vulkan)
       ;;
-    rocm|rocm-next|vulkan)
+    rocm|rocm-next|rocmfp4-llama|vulkan)
       TARGETS+=("$target")
       ;;
     rocm=7.2.3|rocm:7.2.3|rocm-7.2.3)
@@ -165,6 +182,15 @@ build_image() {
   local cache_args=()
   local no_cache_args=()
   local cmd=()
+  local llama_repo="$LLAMA_REPO"
+  local llama_branch="$LLAMA_BRANCH"
+  local llama_ref="$LLAMA_REF"
+
+  if [[ "$build_type" == "rocmfp4-llama" ]]; then
+    llama_repo="$ROCMFP4_LLAMA_REPO"
+    llama_branch="$ROCMFP4_LLAMA_BRANCH"
+    llama_ref="$ROCMFP4_LLAMA_REF"
+  fi
 
   if [[ "$NO_CACHE" == "1" ]]; then
     no_cache_args=(--no-cache)
@@ -204,6 +230,13 @@ build_image() {
         fi
       fi
       ;;
+    rocmfp4-llama)
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama-$CPU_TARGET")
+      fi
+      ;;
     vulkan)
       if [[ "$CPU_TARGET" == "generic" ]]; then
         tag_args=(-t "$IMAGE_PREFIX:vulkan")
@@ -224,7 +257,9 @@ build_image() {
       --build-arg "BUILD_TYPE=$build_type" \
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
-      --build-arg "LLAMA_REF=$LLAMA_REF" \
+      --build-arg "LLAMA_REPO=$llama_repo" \
+      --build-arg "LLAMA_BRANCH=$llama_branch" \
+      --build-arg "LLAMA_REF=$llama_ref" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
@@ -241,7 +276,9 @@ build_image() {
       --build-arg "BUILD_TYPE=$build_type" \
       --build-arg "ROCM_VERSION=$ROCM_VERSION" \
       --build-arg "ROCM_REPO_URL=$rocm_repo_url" \
-      --build-arg "LLAMA_REF=$LLAMA_REF" \
+      --build-arg "LLAMA_REPO=$llama_repo" \
+      --build-arg "LLAMA_BRANCH=$llama_branch" \
+      --build-arg "LLAMA_REF=$llama_ref" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \

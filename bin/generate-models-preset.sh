@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfp4-only] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
@@ -13,6 +13,8 @@ Options:
   --with-non-reasoning  Add Qwen/Qwen-derived :non-reasoning variants.
   --with-vision         Add :vision variants for models with one paired mmproj GGUF.
   --with-configs        Refresh coding-tool configs from the generated preset.
+  --rocmfp4-only        Generate only ROCmFP4 presets for the custom fork image.
+  --fp4-only            Alias for --rocmfp4-only.
 EOF
 }
 
@@ -20,6 +22,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WITH_NON_REASONING=0
 WITH_VISION=0
 WITH_CONFIGS=0
+ROCMFP4_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -33,6 +36,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --with-configs)
       WITH_CONFIGS=1
+      shift
+      ;;
+    --rocmfp4-only|--fp4-only)
+      ROCMFP4_ONLY=1
       shift
       ;;
     --)
@@ -188,6 +195,17 @@ is_crown_halo_mtp_dynamic_model() {
     [[ "$rel" =~ qwen3\.6-35b-a3b-crown-halo-mtp-dynamic ]]
 }
 
+is_rocmfp4_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+}
+
+is_chadrock_rocmfp4_model() {
+  local rel="$1"
+  [[ "$rel" =~ chadrock-35b-ace-saber-rocmfp4-mtp ]] ||
+    [[ "$rel" =~ [Qq]wen3\.6-35[Bb]-[Aa]3[Bb]-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN ]]
+}
+
 emit_model_section() {
   local id="$1"
   local model_path="$2"
@@ -259,6 +277,48 @@ emit_crown_halo_mtp_dynamic_variants() {
   emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off crown-dynamic-mtp
 }
 
+emit_chadrock_rocmfp4_section() {
+  local id="$1"
+  local model_path="$2"
+  local reasoning="$3"
+  local alias="$4"
+
+  emit_model_section "$id" "$model_path" "" 0
+  printf 'alias = %s\n' "$alias"
+  printf 'ctx-size = 262144\n'
+  printf 'reasoning = %s\n' "$reasoning"
+  printf 'parallel = 1\n'
+  printf 'jinja = true\n'
+  printf 'n-gpu-layers = 999\n'
+  printf 'flash-attn = on\n'
+  printf 'device = ROCm0\n'
+  printf 'batch-size = 512\n'
+  printf 'ubatch-size = 512\n'
+  printf 'threads = 16\n'
+  printf 'threads-batch = 32\n'
+  printf 'cache-type-k = q8_0\n'
+  printf 'cache-type-v = q8_0\n'
+  printf 'spec-type = draft-mtp\n'
+  printf 'spec-draft-device = ROCm0\n'
+  printf 'spec-draft-ngl = all\n'
+  printf 'spec-draft-type-k = q4_0\n'
+  printf 'spec-draft-type-v = q4_0\n'
+  printf 'spec-draft-n-max = 3\n'
+  printf 'spec-draft-n-min = 0\n'
+  printf 'spec-draft-p-min = 0.0\n'
+  printf 'spec-draft-p-split = 0.10\n'
+  printf 'metrics = true\n'
+  printf 'mmap = off\n'
+}
+
+emit_chadrock_rocmfp4_variants() {
+  local id="$1"
+  local model_path="$2"
+
+  emit_chadrock_rocmfp4_section "$id:mtp" "$model_path" on chadrock-35b-ace-saber
+  emit_chadrock_rocmfp4_section "$id:mtp:non-reasoning" "$model_path" off chadrock-35b-ace-saber-non-reasoning
+}
+
 emit_non_reasoning_section() {
   local id="$1"
   local model_path="$2"
@@ -310,6 +370,14 @@ while IFS= read -r host_file; do
     continue
   fi
 
+  if (( ROCMFP4_ONLY )); then
+    if ! is_chadrock_rocmfp4_model "$rel"; then
+      continue
+    fi
+  elif is_rocmfp4_model "$rel"; then
+    continue
+  fi
+
   quant="$(infer_quant "$rel")"
   id="$(unique_model_id "$(model_id_base "$rel" "$quant")" "$rel")"
   seen_ids[$id]=1
@@ -326,6 +394,12 @@ while IFS= read -r host_file; do
 
   if is_crown_halo_mtp_dynamic_model "$rel"; then
     emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" >> "$tmp_output"
+    model_count=$((model_count + 1))
+    continue
+  fi
+
+  if is_chadrock_rocmfp4_model "$rel"; then
+    emit_chadrock_rocmfp4_variants "$id" "$model_path" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
   fi
@@ -349,7 +423,9 @@ while IFS= read -r host_file; do
   model_count=$((model_count + 1))
 done < <(find -L "$MODELS_DIR" -type f -name '*.gguf' -printf '%p\n' | sort)
 
-if (( model_count == 0 )); then
+if (( model_count == 0 )) && (( ROCMFP4_ONLY )); then
+  echo "generate-models-preset: warning: no Chadrock ROCmFP4 GGUF models found under $MODELS_DIR" >&2
+elif (( model_count == 0 )); then
   echo "generate-models-preset: warning: no non-mmproj GGUF models found under $MODELS_DIR" >&2
 fi
 
