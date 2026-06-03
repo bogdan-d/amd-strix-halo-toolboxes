@@ -688,6 +688,10 @@ case "$ACTION" in
     require_model "$@"
     MODEL="$(container_model_path "$1")"
     shift
+    LOAD_TEST_ARGS=()
+    if [[ "$BACKEND_FAMILY" != rocmfp4-llama* ]]; then
+      LOAD_TEST_ARGS+=(--no-ui)
+    fi
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     CONTAINER_ID="$(base_run_detached llama-server \
       -m "$MODEL" \
@@ -701,7 +705,7 @@ case "$ACTION" in
       --no-mmap \
       --no-warmup \
       --cache-ram 0 \
-      --no-ui \
+      "${LOAD_TEST_ARGS[@]}" \
       "$@")"
     # shellcheck disable=SC2329
     cleanup_load_test() {
