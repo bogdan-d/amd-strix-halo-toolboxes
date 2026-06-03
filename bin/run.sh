@@ -15,11 +15,14 @@ Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
   rocm-next  ROCm nightly image resolved from CPU_TARGET
   rocmfp4-llama
+             Stable ROCm image with the custom ROCmFP4 llama.cpp fork
+  rocmfp4-llama-next
              ROCm nightly image with the custom ROCmFP4 llama.cpp fork
   vulkan     Vulkan RADV image resolved from CPU_TARGET
   Explicit build tags from bin/build.sh also work, for example:
              rocm-7.2.4, rocm-strix-halo, rocm-next-strix-halo,
-             rocmfp4-llama-strix-halo, rocm7-nightlies-native, vulkan-native
+             rocmfp4-llama-strix-halo, rocmfp4-llama-next-strix-halo,
+             rocm7-nightlies-native, vulkan-native
 
 Commands:
   shell                 Open a shell in a running selected image, or start one
@@ -168,6 +171,10 @@ rocmfp4_llama_tag() {
   printf 'rocmfp4-llama%s' "$(cpu_target_suffix)"
 }
 
+rocmfp4_llama_next_tag() {
+  printf 'rocmfp4-llama-next%s' "$(cpu_target_suffix)"
+}
+
 vulkan_tag() {
   printf 'vulkan%s' "$(cpu_target_suffix)"
 }
@@ -224,6 +231,20 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=512
     DEFAULT_UBATCH=512
     ;;
+  rocmfp4-llama-next)
+    BACKEND_FAMILY="rocmfp4-llama-next"
+    IMAGE_TAG="$(rocmfp4_llama_next_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
+  rocmfp4-llama-next-*)
+    BACKEND_FAMILY="rocmfp4-llama-next"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
   rocmfp4-llama-*)
     BACKEND_FAMILY="rocmfp4-llama"
     IMAGE_TAG="$BACKEND_INPUT"
@@ -261,7 +282,7 @@ esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
-if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
   GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-only)
   HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"
   GGML_HIP_ENABLE_UNIFIED_MEMORY="${GGML_HIP_ENABLE_UNIFIED_MEMORY:-1}"
@@ -311,7 +332,7 @@ for name in "${ENV_NAMES[@]}"; do
       continue
       ;;
     HSA_OVERRIDE_GFX_VERSION|GGML_HIP_ENABLE_UNIFIED_MEMORY)
-      if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+      if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
         continue
       fi
       ;;
@@ -327,7 +348,7 @@ if [[ "$BACKEND_FAMILY" == rocm* ]]; then
   GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
   ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
 fi
-if [[ "$BACKEND_FAMILY" == "rocmfp4-llama" ]]; then
+if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
   ENV_ARGS+=(
     --env "HSA_OVERRIDE_GFX_VERSION=$HSA_OVERRIDE_GFX_VERSION"
     --env "GGML_HIP_ENABLE_UNIFIED_MEMORY=$GGML_HIP_ENABLE_UNIFIED_MEMORY"

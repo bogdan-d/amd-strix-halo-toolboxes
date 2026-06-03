@@ -355,10 +355,18 @@ else
 fi
 trap 'rm -f "$tmp_output"' EXIT
 
-awk '
-  { print }
-  /^# --- GENERATED MODEL SECTIONS ---$/ { exit }
-' "$TEMPLATE" > "$tmp_output"
+if (( ROCMFP4_ONLY )); then
+  awk '
+    /^[[:space:]]*checkpoint-min-step[[:space:]]*=/ { next }
+    { print }
+    /^# --- GENERATED MODEL SECTIONS ---$/ { exit }
+  ' "$TEMPLATE" > "$tmp_output"
+else
+  awk '
+    { print }
+    /^# --- GENERATED MODEL SECTIONS ---$/ { exit }
+  ' "$TEMPLATE" > "$tmp_output"
+fi
 
 declare -A seen_ids=()
 model_count=0

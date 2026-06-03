@@ -13,12 +13,13 @@ The helper script supports the local next-workflow images:
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` by default, or `:rocm-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `rocm7-nightlies` | `localhost/amd-strix-halo-toolboxes:rocm7-nightlies` by default, or `:rocm7-nightlies-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` by default, or `:rocmfp4-llama-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocmfp4-llama-next` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next` by default, or `:rocmfp4-llama-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` by default, or `:vulkan-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
 
 `vulkan-radv` and `vulkan_radv` are aliases for `vulkan`. Explicit tags created
 by `bin/build.sh` also work directly, for example `rocm-strix-halo`,
-`rocm-7.2.4-strix-halo`, `rocm-next-native`, `rocmfp4-llama-strix-halo`, or
-`vulkan-native`.
+`rocm-7.2.4-strix-halo`, `rocm-next-native`, `rocmfp4-llama-strix-halo`,
+`rocmfp4-llama-next-strix-halo`, or `vulkan-native`.
 
 ## Quick Start
 
@@ -44,12 +45,14 @@ or `CPU_TARGET=native` can be run without spelling full tag each time:
 CPU_TARGET=strix-halo bin/run.sh rocm server
 CPU_TARGET=strix-halo bin/run.sh rocm-7.2.4 server
 CPU_TARGET=strix-halo bin/run.sh rocmfp4-llama server
+CPU_TARGET=strix-halo bin/run.sh rocmfp4-llama-next server
 CPU_TARGET=native bin/run.sh vulkan list-devices
 ```
 
 Those commands resolve to `:rocm-strix-halo`, `:rocm-7.2.4-strix-halo`, and
-`:rocmfp4-llama-strix-halo`, and `:vulkan-native`. You can also pass exact
-build tag as backend argument if you want to bypass env-based resolution.
+`:rocmfp4-llama-strix-halo`, `:rocmfp4-llama-next-strix-halo`, and
+`:vulkan-native`. You can also pass exact build tag as backend argument if you
+want to bypass env-based resolution.
 
 List the configured model IDs:
 
@@ -112,15 +115,20 @@ speculation enabled:
 ```
 
 `jcbtc/chadrock-35b-ace-saber-rocmfp4-mtp` is not compatible with stock
-llama.cpp. Build and run it with the explicit `rocmfp4-llama` backend:
+llama.cpp. Build and run it with the explicit `rocmfp4-llama` backend for
+stable ROCm, or `rocmfp4-llama-next` for ROCm nightlies:
 
 ```bash
 bin/build.sh rocmfp4-llama
 bin/run.sh rocmfp4-llama models
 bin/run.sh rocmfp4-llama server
+
+bin/build.sh rocmfp4-llama-next
+bin/run.sh rocmfp4-llama-next models
+bin/run.sh rocmfp4-llama-next server
 ```
 
-For that backend, `bin/run.sh` automatically generates an FP4-only preset and
+For those backends, `bin/run.sh` automatically generates an FP4-only preset and
 sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus
 `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`. Normal generated presets skip ROCmFP4 GGUFs
 so stock images do not expose routes that cannot load. The Chadrock profile
@@ -205,8 +213,9 @@ bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs 
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models.ini
 ```
 
-For the ROCmFP4 custom backend, use `--rocmfp4-only` directly or let
-`bin/run.sh rocmfp4-llama ...` add it automatically:
+For the ROCmFP4 custom backends, use `--rocmfp4-only` directly or let
+`bin/run.sh rocmfp4-llama ...` / `bin/run.sh rocmfp4-llama-next ...` add it
+automatically:
 
 ```bash
 bin/generate-models-preset.sh --rocmfp4-only --with-configs \

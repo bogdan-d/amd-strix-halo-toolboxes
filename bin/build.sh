@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|rocmfp4-llama|vulkan]...
+  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|rocmfp4-llama|rocmfp4-llama-next|vulkan]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -16,12 +16,12 @@ Environment:
   LLAMA_BRANCH       llama.cpp branch for stock backends. Default: master
   LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
   ROCMFP4_LLAMA_REPO
-                     llama.cpp fork for rocmfp4-llama.
+                     llama.cpp fork for rocmfp4-llama targets.
                      Default: https://github.com/charlie12345/rocmfp4-llama.git
   ROCMFP4_LLAMA_BRANCH
-                     llama.cpp fork branch for rocmfp4-llama.
+                     llama.cpp fork branch for rocmfp4-llama targets.
                      Default: mtp-rocmfp4-strix
-  ROCMFP4_LLAMA_REF  llama.cpp fork ref for rocmfp4-llama.
+  ROCMFP4_LLAMA_REF  llama.cpp fork ref for rocmfp4-llama targets.
                      Default: a00689039fb26b8ae91e0425b7416bb04f7f15bb
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
@@ -42,6 +42,7 @@ Examples:
   bin/build.sh rocm=7.2.4
   bin/build.sh rocm-next
   bin/build.sh rocmfp4-llama
+  bin/build.sh rocmfp4-llama-next
   bin/build.sh vulkan
   bin/build.sh --no-cache rocm rocm-next
   bin/build.sh --with-rocwmma rocm rocm-next
@@ -111,7 +112,7 @@ for target in "$@"; do
     all)
       TARGETS+=(rocm rocm-next vulkan)
       ;;
-    rocm|rocm-next|rocmfp4-llama|vulkan)
+    rocm|rocm-next|rocmfp4-llama|rocmfp4-llama-next|vulkan)
       TARGETS+=("$target")
       ;;
     rocm=7.2.3|rocm:7.2.3|rocm-7.2.3)
@@ -186,7 +187,7 @@ build_image() {
   local llama_branch="$LLAMA_BRANCH"
   local llama_ref="$LLAMA_REF"
 
-  if [[ "$build_type" == "rocmfp4-llama" ]]; then
+  if [[ "$build_type" == rocmfp4-llama* ]]; then
     llama_repo="$ROCMFP4_LLAMA_REPO"
     llama_branch="$ROCMFP4_LLAMA_BRANCH"
     llama_ref="$ROCMFP4_LLAMA_REF"
@@ -235,6 +236,13 @@ build_image() {
         tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama")
       else
         tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama-$CPU_TARGET")
+      fi
+      ;;
+    rocmfp4-llama-next)
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama-next")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:rocmfp4-llama-next-$CPU_TARGET")
       fi
       ;;
     vulkan)

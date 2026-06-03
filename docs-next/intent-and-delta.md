@@ -41,13 +41,14 @@ The local branch adds the next-workflow surface:
 
 ## Container Targets
 
-The shared Containerfile currently supports four build types:
+The shared Containerfile currently supports five build types:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
 | `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
-| `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
+| `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
+| `rocmfp4-llama-next` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
 
 The stock targets follow the same llama.cpp source line by default. The old ROCm-only
@@ -59,9 +60,9 @@ through `ldconfig` instead. Use `LLAMA_REF` only for testing, bisects, or
 deliberately preserved test builds across stock backends. The default
 repository is `ggml-org/llama.cpp`, matching the current canonical upstream
 after the old `ggerganov` path began redirecting. `rocmfp4-llama` is isolated
-because Chadrock ROCmFP4 GGUFs require `charlie12345/rocmfp4-llama`; it defaults
-to branch `mtp-rocmfp4-strix` pinned at
-`a00689039fb26b8ae91e0425b7416bb04f7f15bb`.
+because Chadrock ROCmFP4 GGUFs require `charlie12345/rocmfp4-llama`; the
+stable and nightly FP4 targets both default to branch `mtp-rocmfp4-strix`
+pinned at `a00689039fb26b8ae91e0425b7416bb04f7f15bb`.
 
 ## Build Workflow
 
@@ -71,11 +72,12 @@ also use Podman through `BUILDER=podman`.
 Important behavior added locally:
 
 - target aliases such as `rocm`, `rocm=7.2.4`, `rocm-next`,
-  `rocmfp4-llama`, `rocm7-nightlies`, `vulkan`, and `vulkan-radv`;
+  `rocmfp4-llama`, `rocmfp4-llama-next`, `rocm7-nightlies`, `vulkan`, and
+  `vulkan-radv`;
 - `LLAMA_REF` to optionally pin llama.cpp across stock backends for tests,
   bisects, or preserved builds;
 - `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, and `ROCMFP4_LLAMA_REF` for
-  the explicit ROCmFP4 fork target;
+  the explicit stable/nightly ROCmFP4 fork targets;
 - `CPU_TARGET=generic|strix-halo|native`, with `generic` as the reproducible
   default;
 - `ROCWMMA_FATTN=1` or `bin/build.sh --with-rocwmma` to opt ROCm builds into
@@ -111,9 +113,9 @@ Important defaults:
   `reasoning = off` and non-thinking sampling defaults;
 - automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
   for paths or filenames containing `MTP` or `mtp`;
-- FP4-only generated presets for `bin/run.sh rocmfp4-llama ...`, with normal
-  generated presets excluding ROCmFP4 GGUFs so stock images do not route to
-  incompatible models;
+- FP4-only generated presets for `bin/run.sh rocmfp4-llama ...` and
+  `bin/run.sh rocmfp4-llama-next ...`, with normal generated presets excluding
+  ROCmFP4 GGUFs so stock images do not route to incompatible models;
 - generated presets keep shared defaults in `[*]`; this can expose a broken
   `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;

@@ -4,6 +4,7 @@
 #   bin/build.sh rocm
 #   bin/build.sh rocm-next
 #   bin/build.sh rocmfp4-llama
+#   bin/build.sh rocmfp4-llama-next
 #   bin/build.sh vulkan
 
 ARG FEDORA_VERSION=44
@@ -35,7 +36,7 @@ ARG LLAMA_BRANCH
 ARG LLAMA_REF
 
 RUN case "${BUILD_TYPE}" in \
-  rocm|rocm-next|rocmfp4-llama|vulkan) ;; \
+  rocm|rocm-next|rocmfp4-llama|rocmfp4-llama-next|vulkan) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
@@ -59,7 +60,7 @@ RUN --mount=type=cache,id=dnf-rocm-base,target=/var/cache/libdnf5 \
 
 # ROCm stable: use AMD's published RHEL 10 repository. This is the stable ROCm
 # path and the only path that installs ROCm from RPMs in the runtime stage.
-RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
+RUN if [ "${BUILD_TYPE}" = "rocm" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
@@ -72,7 +73,7 @@ RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
   fi
 
 RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
   echo ">>> Installing ROCm ${ROCM_VERSION} builder packages"; \
   rocwmma_packages=""; \
   if [ "${ROCWMMA_FATTN}" = "1" ]; then \
@@ -91,7 +92,7 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
 # of installing ROCm packages there.
 WORKDIR /tmp
 RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
-  if [ "${BUILD_TYPE}" = "rocm-next" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm-next" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama-next" ]; then \
   set -euo pipefail; \
   echo ">>> Resolving latest ROCm nightly tarball"; \
   prefix="therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}"; \
@@ -120,7 +121,7 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
 # Vulkan RADV: Mesa's RADV driver comes from Fedora packages. No ROCm runtime is
 # copied for this target; llama.cpp is built with GGML_VULKAN below.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama-next" ]; then \
   echo ">>> Installing Vulkan RADV builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
@@ -231,7 +232,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     -DHIP_PATH=/opt/rocm \
     -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
-  elif [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
+  elif [ "${BUILD_TYPE}" = "rocmfp4-llama" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama-next" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
     -DGGML_VULKAN=ON \
@@ -291,7 +292,7 @@ RUN if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
   /opt/rocm/llvm/share; \
   mkdir -p /opt/rocm-runtime; \
   cp -a /opt/rocm/. /opt/rocm-runtime/; \
-  elif [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
+  elif [ "${BUILD_TYPE}" = "rocmfp4-llama-next" ]; then \
   echo ">>> Trimming ROCm nightly runtime payload"; \
   find /opt/rocm -type f -name '*.a' -delete; \
   rm -rf \
@@ -316,13 +317,13 @@ ARG ROCM_VERSION
 ARG ROCM_REPO_URL
 
 RUN case "${BUILD_TYPE}" in \
-  rocm|rocm-next|rocmfp4-llama|vulkan) ;; \
+  rocm|rocm-next|rocmfp4-llama|rocmfp4-llama-next|vulkan) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
 # ROCm stable runtime packages come from AMD's repository. Nightlies bring their
 # own /opt/rocm tree from the builder; Vulkan uses only Fedora Mesa packages.
-RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
+RUN if [ "${BUILD_TYPE}" = "rocm" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
@@ -346,7 +347,7 @@ RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
 
 # ROCm stable runtime: install only the runtime libraries needed by llama.cpp.
 RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
   echo ">>> Installing ROCm ${ROCM_VERSION} runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
@@ -357,7 +358,7 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
 # Vulkan RADV runtime: Mesa driver and Vulkan loader from Fedora. Only /dev/dri
 # is required at run time for this target.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama" ] || [ "${BUILD_TYPE}" = "rocmfp4-llama-next" ]; then \
   echo ">>> Installing Vulkan RADV runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
