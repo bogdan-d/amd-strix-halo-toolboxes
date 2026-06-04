@@ -11,7 +11,7 @@ Default:
 
 Environment:
   BUILDER        buildah or podman. Default: buildah
-  IMAGE_PREFIX   Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
+  IMAGE_PREFIX   Image repository prefix. Default: localhost/strix-llama
   BUILD_LOG_DIR  Directory for full build logs. Default: .build-logs
   DRY_RUN        Print cleanup commands without running them. Default: 0
 
@@ -28,7 +28,7 @@ source "$PROJECT_ROOT/bin/env-defaults.sh"
 load_dotenv_defaults "$PROJECT_ROOT/.env"
 
 BUILDER="${BUILDER:-buildah}"
-IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
+IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/strix-llama}"
 BUILD_LOG_DIR="${BUILD_LOG_DIR:-.build-logs}"
 DRY_RUN="${DRY_RUN:-0}"
 

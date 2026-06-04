@@ -40,7 +40,7 @@ Commands:
 
 Environment:
   .env                  Root project .env is loaded automatically if present
-  IMAGE_PREFIX          Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
+  IMAGE_PREFIX          Image repository prefix. Default: localhost/strix-llama
   CPU_TARGET            Image CPU target variant. Default: generic
   ROCM_VERSION          Stable ROCm version for versioned rocm aliases. Default: 7.2.4
   MODELS_DIR            Host model directory to mount. Default: ~/models
@@ -135,7 +135,7 @@ fi
 BACKEND="$1"
 ACTION="$2"
 shift 2
-IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
+IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/strix-llama}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 

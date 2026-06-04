@@ -28,16 +28,16 @@ The default tags are:
 
 | Target | Image |
 | :--- | :--- |
-| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` |
-| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` |
-| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` |
-| `vulkan-rfp4` | `localhost/amd-strix-halo-toolboxes:vulkan-rfp4` |
-| `rocm-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-rfp4` |
-| `rocm-next-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-next-rfp4` |
+| `rocm` | `localhost/strix-llama:rocm` |
+| `rocm-next` | `localhost/strix-llama:rocm-next` |
+| `vulkan` | `localhost/strix-llama:vulkan` |
+| `vulkan-rfp4` | `localhost/strix-llama:vulkan-rfp4` |
+| `rocm-rfp4` | `localhost/strix-llama:rocm-rfp4` |
+| `rocm-next-rfp4` | `localhost/strix-llama:rocm-next-rfp4` |
 
 By default, `rocm` is also tagged as
-`localhost/amd-strix-halo-toolboxes:rocm-7.2.4`, and `rocm-next` is also tagged
-as `localhost/amd-strix-halo-toolboxes:rocm7-nightlies`.
+`localhost/strix-llama:rocm-7.2.4`, and `rocm-next` is also tagged
+as `localhost/strix-llama:rocm7-nightlies`.
 The `*-rfp4` targets are experimental and explicit-only: they are not part of
 `bin/build.sh all` because they build a custom llama.cpp fork for ROCmFP4 GGUFs
 that stock llama.cpp cannot load. `vulkan-rfp4` uses Fedora Mesa RADV,
@@ -176,8 +176,8 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_REF= \
   --build-arg CPU_TARGET=generic \
   --build-arg ROCWMMA_FATTN=0 \
-  -t localhost/amd-strix-halo-toolboxes:rocm \
-  -t localhost/amd-strix-halo-toolboxes:rocm-7.2.4 \
+  -t localhost/strix-llama:rocm \
+  -t localhost/strix-llama:rocm-7.2.4 \
   -f containers/Containerfile .
 ```
 
@@ -186,8 +186,8 @@ For nightly ROCm:
 ```bash
 buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-next \
-  -t localhost/amd-strix-halo-toolboxes:rocm-next \
-  -t localhost/amd-strix-halo-toolboxes:rocm7-nightlies \
+  -t localhost/strix-llama:rocm-next \
+  -t localhost/strix-llama:rocm7-nightlies \
   -f containers/Containerfile .
 ```
 
@@ -199,7 +199,7 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
-  -t localhost/amd-strix-halo-toolboxes:vulkan-rfp4 \
+  -t localhost/strix-llama:vulkan-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
 
@@ -211,7 +211,7 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
-  -t localhost/amd-strix-halo-toolboxes:rocm-rfp4 \
+  -t localhost/strix-llama:rocm-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
 
@@ -223,7 +223,7 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
-  -t localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 \
+  -t localhost/strix-llama:rocm-next-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
 
@@ -232,7 +232,7 @@ For Vulkan:
 ```bash
 buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=vulkan \
-  -t localhost/amd-strix-halo-toolboxes:vulkan \
+  -t localhost/strix-llama:vulkan \
   -f containers/Containerfile .
 ```
 
@@ -250,12 +250,12 @@ source files left by one backend do not break the next backend build.
 Check the built binaries:
 
 ```bash
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:vulkan llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:vulkan-rfp4 llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm-rfp4 llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 llama-server --version
+podman run --rm localhost/strix-llama:rocm llama-server --version
+podman run --rm localhost/strix-llama:rocm-next llama-server --version
+podman run --rm localhost/strix-llama:vulkan llama-server --version
+podman run --rm localhost/strix-llama:vulkan-rfp4 llama-server --version
+podman run --rm localhost/strix-llama:rocm-rfp4 llama-server --version
+podman run --rm localhost/strix-llama:rocm-next-rfp4 llama-server --version
 ```
 
 Check GPU visibility:
@@ -267,7 +267,7 @@ podman run --rm \
   --group-add keep-groups \
   --device /dev/dri \
   --device /dev/kfd \
-  localhost/amd-strix-halo-toolboxes:rocm \
+  localhost/strix-llama:rocm \
   llama-cli --list-devices
 
 podman run --rm \
@@ -276,7 +276,7 @@ podman run --rm \
   --group-add keep-groups \
   --device /dev/dri \
   --device /dev/kfd \
-  localhost/amd-strix-halo-toolboxes:rocm-next \
+  localhost/strix-llama:rocm-next \
   llama-cli --list-devices
 
 podman run --rm \
@@ -284,18 +284,7 @@ podman run --rm \
   --security-opt label=disable \
   --group-add keep-groups \
   --device /dev/dri \
-  localhost/amd-strix-halo-toolboxes:vulkan-rfp4 \
-  llama-cli --list-devices
-
-podman run --rm \
-  --security-opt seccomp=unconfined \
-  --security-opt label=disable \
-  --group-add keep-groups \
-  --device /dev/dri \
-  --device /dev/kfd \
-  --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
-  --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
-  localhost/amd-strix-halo-toolboxes:rocm-rfp4 \
+  localhost/strix-llama:vulkan-rfp4 \
   llama-cli --list-devices
 
 podman run --rm \
@@ -306,7 +295,7 @@ podman run --rm \
   --device /dev/kfd \
   --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
   --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
-  localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 \
+  localhost/strix-llama:rocm-rfp4 \
   llama-cli --list-devices
 
 podman run --rm \
@@ -314,7 +303,18 @@ podman run --rm \
   --security-opt label=disable \
   --group-add keep-groups \
   --device /dev/dri \
-  localhost/amd-strix-halo-toolboxes:vulkan \
+  --device /dev/kfd \
+  --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
+  --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
+  localhost/strix-llama:rocm-next-rfp4 \
+  llama-cli --list-devices
+
+podman run --rm \
+  --security-opt seccomp=unconfined \
+  --security-opt label=disable \
+  --group-add keep-groups \
+  --device /dev/dri \
+  localhost/strix-llama:vulkan \
   llama-cli --list-devices
 ```
 

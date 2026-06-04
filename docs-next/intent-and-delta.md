@@ -45,12 +45,12 @@ The next workflow currently supports six build types across two Containerfiles:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
-| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
-| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
-| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
-| `vulkan-rfp4` | `localhost/amd-strix-halo-toolboxes:vulkan-rfp4` | Explicit experimental Vulkan build of the custom ROCmFP4 llama.cpp fork. |
-| `rocm-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-rfp4` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
-| `rocm-next-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-next-rfp4` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
+| `rocm` | `localhost/strix-llama:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
+| `rocm-next` | `localhost/strix-llama:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
+| `vulkan` | `localhost/strix-llama:vulkan` | Fedora Mesa RADV Vulkan runtime. |
+| `vulkan-rfp4` | `localhost/strix-llama:vulkan-rfp4` | Explicit experimental Vulkan build of the custom ROCmFP4 llama.cpp fork. |
+| `rocm-rfp4` | `localhost/strix-llama:rocm-rfp4` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
+| `rocm-next-rfp4` | `localhost/strix-llama:rocm-next-rfp4` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 
 `containers/Containerfile` is the stock llama.cpp build path for `rocm`,
 `rocm-next`, and `vulkan`. `containers/Containerfile.rocmfp4` is the isolated

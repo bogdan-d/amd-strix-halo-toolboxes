@@ -8,14 +8,14 @@ The helper script supports the local next-workflow images:
 
 | Backend | Image | GPU devices |
 | :--- | :--- | :--- |
-| `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` by default, or `:rocm-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `rocm-7.2.4` | `localhost/amd-strix-halo-toolboxes:rocm-7.2.4` by default, or `:rocm-7.2.4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` by default, or `:rocm-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `rocm7-nightlies` | `localhost/amd-strix-halo-toolboxes:rocm7-nightlies` by default, or `:rocm7-nightlies-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` by default, or `:vulkan-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
-| `vulkan-rfp4` | `localhost/amd-strix-halo-toolboxes:vulkan-rfp4` by default, or `:vulkan-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
-| `rocm-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-rfp4` by default, or `:rocm-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `rocm-next-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-next-rfp4` by default, or `:rocm-next-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm` | `localhost/strix-llama:rocm` by default, or `:rocm-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm-7.2.4` | `localhost/strix-llama:rocm-7.2.4` by default, or `:rocm-7.2.4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm-next` | `localhost/strix-llama:rocm-next` by default, or `:rocm-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm7-nightlies` | `localhost/strix-llama:rocm7-nightlies` by default, or `:rocm7-nightlies-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `vulkan` | `localhost/strix-llama:vulkan` by default, or `:vulkan-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
+| `vulkan-rfp4` | `localhost/strix-llama:vulkan-rfp4` by default, or `:vulkan-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
+| `rocm-rfp4` | `localhost/strix-llama:rocm-rfp4` by default, or `:rocm-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
+| `rocm-next-rfp4` | `localhost/strix-llama:rocm-next-rfp4` by default, or `:rocm-next-rfp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 
 `vulkan-radv` and `vulkan_radv` are aliases for `vulkan`. Explicit tags created
 by `bin/build.sh` also work directly, for example `rocm-strix-halo`,
@@ -374,7 +374,7 @@ podman run --rm -it \
   -v /var/mnt/xdata/models:/root/models \
   -v /tmp/llama-models.ini:/tmp/llama-models.ini:ro \
   -p 8080:8080 \
-  localhost/amd-strix-halo-toolboxes:vulkan \
+  localhost/strix-llama:vulkan \
   llama-server --models-preset /tmp/llama-models.ini --models-max 1 \
     --host 0.0.0.0 --port 8080 \
     --batch-size 2048 --ubatch-size 512
@@ -394,7 +394,7 @@ podman run --rm -it \
   -v /var/mnt/xdata/models:/root/models \
   -v /tmp/llama-models.ini:/tmp/llama-models.ini:ro \
   -p 8080:8080 \
-  localhost/amd-strix-halo-toolboxes:rocm \
+  localhost/strix-llama:rocm \
   llama-server --models-preset /tmp/llama-models.ini --models-max 1 \
     --host 0.0.0.0 --port 8080 \
     --batch-size 4096 --ubatch-size 2048
@@ -413,7 +413,7 @@ podman run --rm -it \
   --device /dev/dri \
   -v /var/mnt/xdata/models:/root/models \
   -p 8080:8080 \
-  localhost/amd-strix-halo-toolboxes:vulkan \
+  localhost/strix-llama:vulkan \
   llama-server -m /root/models/qwen-mtp/model.gguf --host 0.0.0.0 --port 8080 \
     -c 131072 -b 2048 -ub 512 -ngl 999 -fa 1 --no-mmap \
     --spec-type draft-mtp --spec-draft-n-max 3 \

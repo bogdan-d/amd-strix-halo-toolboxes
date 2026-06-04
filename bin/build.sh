@@ -8,7 +8,7 @@ Usage:
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
-  IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
+  IMAGE_PREFIX       Image repository prefix. Default: localhost/strix-llama
   CONTAINERFILE      Stock Containerfile path. Default: containers/Containerfile
   ROCMFP4_CONTAINERFILE
                      ROCmFP4 Containerfile path.
@@ -59,7 +59,7 @@ source "$PROJECT_ROOT/bin/env-defaults.sh"
 load_dotenv_defaults "$PROJECT_ROOT/.env"
 
 BUILDER="${BUILDER:-buildah}"
-IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
+IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/strix-llama}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
 ROCMFP4_CONTAINERFILE="${ROCMFP4_CONTAINERFILE:-containers/Containerfile.rocmfp4}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
