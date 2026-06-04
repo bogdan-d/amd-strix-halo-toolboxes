@@ -14,15 +14,16 @@ Options:
 Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
   rocm-next  ROCm nightly image resolved from CPU_TARGET
-  rocmfp4-llama
-             Stable ROCm image with the custom ROCmFP4 llama.cpp fork
-  rocmfp4-llama-next
-             ROCm nightly image with the custom ROCmFP4 llama.cpp fork
   vulkan     Vulkan RADV image resolved from CPU_TARGET
+  vulkan-rfp4
+             Vulkan image with the custom ROCmFP4 llama.cpp fork
+  rocm-rfp4  Stable ROCm image with the custom ROCmFP4 llama.cpp fork
+  rocm-next-rfp4
+             ROCm nightly image with the custom ROCmFP4 llama.cpp fork
   Explicit build tags from bin/build.sh also work, for example:
              rocm-7.2.4, rocm-strix-halo, rocm-next-strix-halo,
-             rocmfp4-llama-strix-halo, rocmfp4-llama-next-strix-halo,
-             rocm7-nightlies-native, vulkan-native
+             vulkan-rfp4-strix-halo, rocm-rfp4-strix-halo,
+             rocm-next-rfp4-strix-halo, rocm7-nightlies-native, vulkan-native
 
 Commands:
   shell                 Open a shell in a running selected image, or start one
@@ -167,12 +168,16 @@ rocm_next_alias_tag() {
   printf 'rocm7-nightlies%s' "$(cpu_target_suffix)"
 }
 
-rocmfp4_llama_tag() {
-  printf 'rocmfp4-llama%s' "$(cpu_target_suffix)"
+vulkan_rfp4_tag() {
+  printf 'vulkan-rfp4%s' "$(cpu_target_suffix)"
 }
 
-rocmfp4_llama_next_tag() {
-  printf 'rocmfp4-llama-next%s' "$(cpu_target_suffix)"
+rocm_rfp4_tag() {
+  printf 'rocm-rfp4%s' "$(cpu_target_suffix)"
+}
+
+rocm_next_rfp4_tag() {
+  printf 'rocm-next-rfp4%s' "$(cpu_target_suffix)"
 }
 
 vulkan_tag() {
@@ -196,6 +201,20 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=2048
     DEFAULT_UBATCH=512
     ;;
+  vulkan-rfp4)
+    BACKEND_FAMILY="vulkan-rfp4"
+    IMAGE_TAG="$(vulkan_rfp4_tag)"
+    DEVICE_ARGS=(--device /dev/dri)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
+  vulkan-rfp4-*)
+    BACKEND_FAMILY="vulkan-rfp4"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
   vulkan-*)
     BACKEND_FAMILY="vulkan"
     IMAGE_TAG="$BACKEND_INPUT"
@@ -217,6 +236,20 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
+  rocm-rfp4)
+    BACKEND_FAMILY="rocm-rfp4"
+    IMAGE_TAG="$(rocm_rfp4_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
+  rocm-next-rfp4)
+    BACKEND_FAMILY="rocm-next-rfp4"
+    IMAGE_TAG="$(rocm_next_rfp4_tag)"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=512
+    DEFAULT_UBATCH=512
+    ;;
   rocm-next-*|rocm7-nightlies-*)
     BACKEND_FAMILY="rocm-next"
     IMAGE_TAG="$BACKEND_INPUT"
@@ -224,29 +257,15 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
-  rocmfp4-llama)
-    BACKEND_FAMILY="rocmfp4-llama"
-    IMAGE_TAG="$(rocmfp4_llama_tag)"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
-  rocmfp4-llama-next)
-    BACKEND_FAMILY="rocmfp4-llama-next"
-    IMAGE_TAG="$(rocmfp4_llama_next_tag)"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
-  rocmfp4-llama-next-*)
-    BACKEND_FAMILY="rocmfp4-llama-next"
+  rocm-next-rfp4-*)
+    BACKEND_FAMILY="rocm-next-rfp4"
     IMAGE_TAG="$BACKEND_INPUT"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_BATCH=512
     DEFAULT_UBATCH=512
     ;;
-  rocmfp4-llama-*)
-    BACKEND_FAMILY="rocmfp4-llama"
+  rocm-rfp4-*)
+    BACKEND_FAMILY="rocm-rfp4"
     IMAGE_TAG="$BACKEND_INPUT"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_BATCH=512
@@ -282,8 +301,15 @@ esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
-if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
+if [[ "$BACKEND_FAMILY" == *-rfp4 ]]; then
   GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-only)
+  if [[ "$BACKEND_FAMILY" == vulkan-rfp4 ]]; then
+    GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-device Vulkan0)
+  else
+    GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-device ROCm0)
+  fi
+fi
+if [[ "$BACKEND_FAMILY" == rocm*-rfp4 ]]; then
   HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"
   GGML_HIP_ENABLE_UNIFIED_MEMORY="${GGML_HIP_ENABLE_UNIFIED_MEMORY:-1}"
 fi
@@ -332,7 +358,7 @@ for name in "${ENV_NAMES[@]}"; do
       continue
       ;;
     HSA_OVERRIDE_GFX_VERSION|GGML_HIP_ENABLE_UNIFIED_MEMORY)
-      if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
+      if [[ "$BACKEND_FAMILY" == rocm*-rfp4 ]]; then
         continue
       fi
       ;;
@@ -348,7 +374,7 @@ if [[ "$BACKEND_FAMILY" == rocm* ]]; then
   GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
   ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
 fi
-if [[ "$BACKEND_FAMILY" == rocmfp4-llama* ]]; then
+if [[ "$BACKEND_FAMILY" == rocm*-rfp4 ]]; then
   ENV_ARGS+=(
     --env "HSA_OVERRIDE_GFX_VERSION=$HSA_OVERRIDE_GFX_VERSION"
     --env "GGML_HIP_ENABLE_UNIFIED_MEMORY=$GGML_HIP_ENABLE_UNIFIED_MEMORY"
@@ -689,7 +715,7 @@ case "$ACTION" in
     MODEL="$(container_model_path "$1")"
     shift
     LOAD_TEST_ARGS=()
-    if [[ "$BACKEND_FAMILY" != rocmfp4-llama* ]]; then
+    if [[ "$BACKEND_FAMILY" != *-rfp4 ]]; then
       LOAD_TEST_ARGS+=(--no-ui)
     fi
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)

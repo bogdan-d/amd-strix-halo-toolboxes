@@ -41,20 +41,21 @@ The local branch adds the next-workflow surface:
 
 ## Container Targets
 
-The next workflow currently supports five build types across two Containerfiles:
+The next workflow currently supports six build types across two Containerfiles:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
 | `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
-| `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
-| `rocmfp4-llama-next` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
+| `vulkan-rfp4` | `localhost/amd-strix-halo-toolboxes:vulkan-rfp4` | Explicit experimental Vulkan build of the custom ROCmFP4 llama.cpp fork. |
+| `rocm-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-rfp4` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
+| `rocm-next-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-next-rfp4` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 
 `containers/Containerfile` is the stock llama.cpp build path for `rocm`,
 `rocm-next`, and `vulkan`. `containers/Containerfile.rocmfp4` is the isolated
-ROCmFP4 fork build path for `rocmfp4-llama` and `rocmfp4-llama-next`, with a
-separate llama.cpp source cache.
+ROCmFP4 fork build path for `vulkan-rfp4`, `rocm-rfp4`, and
+`rocm-next-rfp4`, with a separate llama.cpp source cache.
 
 The stock targets follow the same llama.cpp source line by default. The old ROCm-only
 `95405ac65` pin worked around Strix Halo ROCm model-load crashes while the
@@ -64,10 +65,10 @@ environment; current images avoid those exports and expose ROCm libraries
 through `ldconfig` instead. Use `LLAMA_REF` only for testing, bisects, or
 deliberately preserved test builds across stock backends. The default
 repository is `ggml-org/llama.cpp`, matching the current canonical upstream
-after the old `ggerganov` path began redirecting. `rocmfp4-llama` is isolated
-because Chadrock ROCmFP4 GGUFs require `charlie12345/rocmfp4-llama`; the
-stable and nightly FP4 targets both default to branch `mtp-rocmfp4-strix`
-pinned at `a00689039fb26b8ae91e0425b7416bb04f7f15bb`.
+after the old `ggerganov` path began redirecting. The `*-rfp4` targets are
+isolated because Chadrock ROCmFP4 GGUFs require
+`charlie12345/rocmfp4-llama`; all RFP4 targets default to branch
+`mtp-rocmfp4-strix` pinned at `a00689039fb26b8ae91e0425b7416bb04f7f15bb`.
 
 ## Build Workflow
 
@@ -77,14 +78,14 @@ also use Podman through `BUILDER=podman`.
 Important behavior added locally:
 
 - target aliases such as `rocm`, `rocm=7.2.4`, `rocm-next`,
-  `rocmfp4-llama`, `rocmfp4-llama-next`, `rocm7-nightlies`, `vulkan`, and
-  `vulkan-radv`;
+  `rocm7-nightlies`, `vulkan`, `vulkan-radv`, `vulkan-rfp4`, `rocm-rfp4`,
+  and `rocm-next-rfp4`;
 - automatic Containerfile selection: stock targets use `containers/Containerfile`
   and ROCmFP4 targets use `containers/Containerfile.rocmfp4`;
 - `LLAMA_REF` to optionally pin llama.cpp across stock backends for tests,
   bisects, or preserved builds;
 - `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, and `ROCMFP4_LLAMA_REF` for
-  the explicit stable/nightly ROCmFP4 fork targets;
+  the explicit RFP4 fork targets;
 - `CPU_TARGET=generic|strix-halo|native`, with `generic` as the reproducible
   default;
 - `ROCWMMA_FATTN=1` or `bin/build.sh --with-rocwmma` to opt ROCm builds into
@@ -120,9 +121,10 @@ Important defaults:
   `reasoning = off` and non-thinking sampling defaults;
 - automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
   for paths or filenames containing `MTP` or `mtp`;
-- FP4-only generated presets for `bin/run.sh rocmfp4-llama ...` and
-  `bin/run.sh rocmfp4-llama-next ...`, with normal generated presets excluding
-  ROCmFP4 GGUFs so stock images do not route to incompatible models;
+- FP4-only generated presets for `bin/run.sh vulkan-rfp4 ...`,
+  `bin/run.sh rocm-rfp4 ...`, and `bin/run.sh rocm-next-rfp4 ...`, with normal
+  generated presets excluding ROCmFP4 GGUFs so stock images do not route to
+  incompatible models;
 - generated presets keep shared defaults in `[*]`; this can expose a broken
   `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;
@@ -132,9 +134,10 @@ Important defaults:
   documented but disabled in `models-template.ini` for explicit long-context
   experiments;
 - `131072` context and `2048` batch as the direct-run baseline;
-- backend-specific microbatch defaults: `512` for Vulkan, `2048` for ROCm, and
-  `512` for ROCmFP4;
-- `/dev/dri` for Vulkan and `/dev/dri` plus `/dev/kfd` for ROCm/ROCmFP4;
+- backend-specific microbatch defaults: `512` for Vulkan/RFP4 and `2048` for
+  stock ROCm;
+- `/dev/dri` for Vulkan/Vulkan RFP4 and `/dev/dri` plus `/dev/kfd` for
+  ROCm/ROCm RFP4;
 - Hugging Face cache mounting through `HF_CACHE_DIR` and `HF_HOME`;
 - automatic `.env` loading for runtime environment variables.
 - `load-test` for bounded model-load smoke tests that start `llama-server`,

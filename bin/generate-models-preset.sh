@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfp4-only] <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfp4-only] [--rocmfp4-device DEVICE] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
@@ -14,6 +14,7 @@ Options:
   --with-vision         Add :vision variants for models with one paired mmproj GGUF.
   --with-configs        Refresh coding-tool configs from the generated preset.
   --rocmfp4-only        Generate only ROCmFP4 presets for the custom fork image.
+  --rocmfp4-device      Device name for ROCmFP4 presets. Default: ROCm0.
   --fp4-only            Alias for --rocmfp4-only.
 EOF
 }
@@ -23,6 +24,7 @@ WITH_NON_REASONING=0
 WITH_VISION=0
 WITH_CONFIGS=0
 ROCMFP4_ONLY=0
+ROCMFP4_DEVICE=ROCm0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -41,6 +43,15 @@ while [[ $# -gt 0 ]]; do
     --rocmfp4-only|--fp4-only)
       ROCMFP4_ONLY=1
       shift
+      ;;
+    --rocmfp4-device)
+      if [[ $# -lt 2 || "$2" == --* ]]; then
+        echo "Missing value for --rocmfp4-device" >&2
+        usage >&2
+        exit 1
+      fi
+      ROCMFP4_DEVICE="$2"
+      shift 2
       ;;
     --)
       shift
@@ -291,7 +302,7 @@ emit_chadrock_rocmfp4_section() {
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
-  printf 'device = ROCm0\n'
+  printf 'device = %s\n' "$ROCMFP4_DEVICE"
   printf 'batch-size = 512\n'
   printf 'ubatch-size = 512\n'
   printf 'threads = 16\n'
@@ -299,7 +310,7 @@ emit_chadrock_rocmfp4_section() {
   printf 'cache-type-k = q8_0\n'
   printf 'cache-type-v = q8_0\n'
   printf 'spec-type = draft-mtp\n'
-  printf 'spec-draft-device = ROCm0\n'
+  printf 'spec-draft-device = %s\n' "$ROCMFP4_DEVICE"
   printf 'spec-draft-ngl = all\n'
   printf 'spec-draft-type-k = q4_0\n'
   printf 'spec-draft-type-v = q4_0\n'

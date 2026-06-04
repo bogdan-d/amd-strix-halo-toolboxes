@@ -18,9 +18,10 @@ Build one image:
 ```bash
 bin/build.sh rocm
 bin/build.sh rocm-next
-bin/build.sh rocmfp4-llama
-bin/build.sh rocmfp4-llama-next
 bin/build.sh vulkan
+bin/build.sh vulkan-rfp4
+bin/build.sh rocm-rfp4
+bin/build.sh rocm-next-rfp4
 ```
 
 The default tags are:
@@ -29,18 +30,19 @@ The default tags are:
 | :--- | :--- |
 | `rocm` | `localhost/amd-strix-halo-toolboxes:rocm` |
 | `rocm-next` | `localhost/amd-strix-halo-toolboxes:rocm-next` |
-| `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` |
-| `rocmfp4-llama-next` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next` |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` |
+| `vulkan-rfp4` | `localhost/amd-strix-halo-toolboxes:vulkan-rfp4` |
+| `rocm-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-rfp4` |
+| `rocm-next-rfp4` | `localhost/amd-strix-halo-toolboxes:rocm-next-rfp4` |
 
 By default, `rocm` is also tagged as
 `localhost/amd-strix-halo-toolboxes:rocm-7.2.4`, and `rocm-next` is also tagged
 as `localhost/amd-strix-halo-toolboxes:rocm7-nightlies`.
-`rocmfp4-llama` and `rocmfp4-llama-next` are experimental and explicit-only:
-they are not part of `bin/build.sh all` because they build a custom llama.cpp
-fork for ROCmFP4 GGUFs that stock llama.cpp cannot load. The unsuffixed target
-uses stable ROCm packages; the `-next` target uses the ROCm nightly/TheRock
-runtime path.
+The `*-rfp4` targets are experimental and explicit-only: they are not part of
+`bin/build.sh all` because they build a custom llama.cpp fork for ROCmFP4 GGUFs
+that stock llama.cpp cannot load. `vulkan-rfp4` uses Fedora Mesa RADV,
+`rocm-rfp4` uses stable ROCm packages, and `rocm-next-rfp4` uses the ROCm
+nightly/TheRock runtime path.
 
 ## Build Script
 
@@ -76,7 +78,7 @@ Override Containerfile paths:
 
 ```bash
 CONTAINERFILE=containers/Containerfile bin/build.sh rocm
-ROCMFP4_CONTAINERFILE=containers/Containerfile.rocmfp4 bin/build.sh rocmfp4-llama
+ROCMFP4_CONTAINERFILE=containers/Containerfile.rocmfp4 bin/build.sh rocm-rfp4
 ```
 
 Rebuild without using cached image layers, while keeping the Buildah storage and
@@ -101,9 +103,9 @@ bin/build.sh --with-rocwmma rocm rocm-next
 ROCWMMA_FATTN=1 bin/build.sh rocm
 ```
 
-This passes `-DGGML_HIP_ROCWMMA_FATTN=ON` to the `rocm` and `rocm-next`
-CMake builds only. Stable ROCm builds also install `rocwmma-devel` in the
-builder stage when enabled. Vulkan builds ignore this option.
+This passes `-DGGML_HIP_ROCWMMA_FATTN=ON` to ROCm CMake builds only. Stable
+ROCm builds also install `rocwmma-devel` in the builder stage when enabled.
+Vulkan builds ignore this option.
 
 Stock targets leave `LLAMA_REF` empty by default, so they follow
 `LLAMA_BRANCH`.
@@ -126,9 +128,10 @@ The ROCmFP4 targets are isolated from those stock defaults. They build
 testing a new fork build:
 
 ```bash
-bin/build.sh rocmfp4-llama
-bin/build.sh rocmfp4-llama-next
-ROCMFP4_LLAMA_REF=mtp-rocmfp4-strix bin/build.sh rocmfp4-llama
+bin/build.sh vulkan-rfp4
+bin/build.sh rocm-rfp4
+bin/build.sh rocm-next-rfp4
+ROCMFP4_LLAMA_REF=mtp-rocmfp4-strix bin/build.sh rocm-rfp4
 ```
 
 The default CPU target is `generic`, which disables host-native CPU detection so
@@ -142,11 +145,11 @@ CPU_TARGET=strix-halo bin/build.sh rocm
 
 Non-generic CPU targets use only variant tags, for example `rocm-strix-halo`,
 `rocm-7.2.4-strix-halo`, `rocm-next-strix-halo`, and
-`rocmfp4-llama-strix-halo` / `rocmfp4-llama-next-strix-halo`. They do not
-overwrite the default `rocm`, `rocm-next`, `rocmfp4-llama`,
-`rocmfp4-llama-next`, or `vulkan` tags. Buildah cache repositories and CMake
-build directories include the CPU target, so generic and Strix Halo builds do
-not reuse each other's CMake cache.
+`vulkan-rfp4-strix-halo` / `rocm-rfp4-strix-halo` /
+`rocm-next-rfp4-strix-halo`. They do not overwrite the default `rocm`,
+`rocm-next`, `vulkan`, `vulkan-rfp4`, `rocm-rfp4`, or `rocm-next-rfp4` tags.
+Buildah cache repositories and CMake build directories include the CPU target,
+so generic and Strix Halo builds do not reuse each other's CMake cache.
 
 Local builds use Buildah's normal layer cache. To push and pull cache through a
 real registry in CI, set `BUILD_CACHE_REPO`:
@@ -188,27 +191,39 @@ buildah bud --pull --format oci --layers \
   -f containers/Containerfile .
 ```
 
-For stable ROCmFP4 llama.cpp:
+For Vulkan RFP4 llama.cpp:
 
 ```bash
 buildah bud --pull --format oci --layers \
-  --build-arg BUILD_TYPE=rocmfp4-llama \
+  --build-arg BUILD_TYPE=vulkan-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
-  -t localhost/amd-strix-halo-toolboxes:rocmfp4-llama \
+  -t localhost/amd-strix-halo-toolboxes:vulkan-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
 
-For ROCmFP4 llama.cpp on ROCm nightlies:
+For stable ROCm RFP4 llama.cpp:
 
 ```bash
 buildah bud --pull --format oci --layers \
-  --build-arg BUILD_TYPE=rocmfp4-llama-next \
+  --build-arg BUILD_TYPE=rocm-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
-  -t localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next \
+  -t localhost/amd-strix-halo-toolboxes:rocm-rfp4 \
+  -f containers/Containerfile.rocmfp4 .
+```
+
+For ROCm nightly RFP4 llama.cpp:
+
+```bash
+buildah bud --pull --format oci --layers \
+  --build-arg BUILD_TYPE=rocm-next-rfp4 \
+  --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
+  --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
+  --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
+  -t localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
 
@@ -237,9 +252,10 @@ Check the built binaries:
 ```bash
 podman run --rm localhost/amd-strix-halo-toolboxes:rocm llama-server --version
 podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocmfp4-llama llama-server --version
-podman run --rm localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next llama-server --version
 podman run --rm localhost/amd-strix-halo-toolboxes:vulkan llama-server --version
+podman run --rm localhost/amd-strix-halo-toolboxes:vulkan-rfp4 llama-server --version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm-rfp4 llama-server --version
+podman run --rm localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 llama-server --version
 ```
 
 Check GPU visibility:
@@ -268,10 +284,7 @@ podman run --rm \
   --security-opt label=disable \
   --group-add keep-groups \
   --device /dev/dri \
-  --device /dev/kfd \
-  --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
-  --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
-  localhost/amd-strix-halo-toolboxes:rocmfp4-llama \
+  localhost/amd-strix-halo-toolboxes:vulkan-rfp4 \
   llama-cli --list-devices
 
 podman run --rm \
@@ -282,7 +295,18 @@ podman run --rm \
   --device /dev/kfd \
   --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
   --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
-  localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next \
+  localhost/amd-strix-halo-toolboxes:rocm-rfp4 \
+  llama-cli --list-devices
+
+podman run --rm \
+  --security-opt seccomp=unconfined \
+  --security-opt label=disable \
+  --group-add keep-groups \
+  --device /dev/dri \
+  --device /dev/kfd \
+  --env HSA_OVERRIDE_GFX_VERSION=11.5.1 \
+  --env GGML_HIP_ENABLE_UNIFIED_MEMORY=1 \
+  localhost/amd-strix-halo-toolboxes:rocm-next-rfp4 \
   llama-cli --list-devices
 
 podman run --rm \
