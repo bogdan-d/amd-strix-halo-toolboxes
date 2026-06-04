@@ -116,9 +116,9 @@ speculation enabled:
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:mtp"
 ```
 
-`jcbtc/chadrock-35b-ace-saber-rocmfp4-mtp` is not compatible with stock
-llama.cpp. Build and run it with the explicit `vulkan-rfp4` backend for Vulkan,
-`rocm-rfp4` for stable ROCm, or `rocm-next-rfp4` for ROCm nightlies:
+ROCmFP4 GGUFs are not compatible with stock llama.cpp. Build and run them with
+the explicit `vulkan-rfp4` backend for Vulkan, `rocm-rfp4` for stable ROCm, or
+`rocm-next-rfp4` for ROCm nightlies:
 
 ```bash
 bin/build.sh vulkan-rfp4
@@ -137,13 +137,15 @@ bin/run.sh rocm-next-rfp4 server
 For those backends, `bin/run.sh` automatically generates an FP4-only preset.
 For the ROCm RFP4 backends it also sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus
 `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`. Normal generated presets skip ROCmFP4
-GGUFs so stock images do not expose routes that cannot load. The Chadrock
-profile always emits exactly two single-slot MTP routes: alias
-`chadrock-35b-ace-saber` with reasoning enabled and alias
-`chadrock-35b-ace-saber-non-reasoning` with reasoning disabled. Both keep the
-author profile in the model section: 262144 context, backend-specific device
-selection (`Vulkan0` for `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `b512/u512`,
-`q8_0` main KV, `q4_0` draft KV, `draft-mtp` depth 3, metrics, and `mmap` off.
+GGUFs so stock images do not expose routes that cannot load. The ROCmFP4
+profile emits exactly two single-slot MTP routes per compatible model: one
+alias with reasoning enabled and one `-non-reasoning` alias with reasoning
+disabled. Known aliases include `chadrock-35b-ace-saber`,
+`chadrock-35b-uncensored`, `qwopus-27b-v2-chadrock`, `qwopus-27b-v2`, and
+`qwopus-35b-a3b-v1`. Both routes keep the author profile in the model section:
+262144 context, backend-specific device selection (`Vulkan0` for
+`vulkan-rfp4`, `ROCm0` for ROCm RFP4), `b512/u512`, `q8_0` main KV, `q4_0`
+draft KV, `draft-mtp` depth 3, metrics, and `mmap` off.
 
 `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
 MTP profile. The generator always emits exactly two routes for it, regardless

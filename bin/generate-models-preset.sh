@@ -206,15 +206,35 @@ is_crown_halo_mtp_dynamic_model() {
     [[ "$rel" =~ qwen3\.6-35b-a3b-crown-halo-mtp-dynamic ]]
 }
 
-is_rocmfp4_model() {
+is_rocmfp4_llamacpp_model() {
   local rel="$1"
-  [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+  [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]] ||
+    [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]]
 }
 
-is_chadrock_rocmfp4_model() {
+rocmfp4_alias_base() {
   local rel="$1"
-  [[ "$rel" =~ chadrock-35b-ace-saber-rocmfp4-mtp ]] ||
-    [[ "$rel" =~ [Qq]wen3\.6-35[Bb]-[Aa]3[Bb]-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN ]]
+
+  case "$rel" in
+    *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
+      printf '%s\n' chadrock-35b-ace-saber
+      ;;
+    *CHADROCK3.6-35B-UNCENSORED-MTP-STRIX-LEAN*|*chadrock3.6-35b-uncensored-mtp-strix-lean*)
+      printf '%s\n' chadrock-35b-uncensored
+      ;;
+    *qwopus3.6-27b-v2-chadrock-rocmfp4-mtp*|*Qwopus3.6-27B-v2-MTP-BF16-to-ROCmFP4-STRIX_LEAN*)
+      printf '%s\n' qwopus-27b-v2-chadrock
+      ;;
+    *Qwopus3.6-27B-v2-MTP-Q4_0_ROCMFP4*|*qwopus3.6-27b-v2-mtp-q4_0_rocmfp4*)
+      printf '%s\n' qwopus-27b-v2
+      ;;
+    *Qwopus3.6-35B-A3B-v1-MTP-Q4_0_ROCMFP4*|*qwopus3.6-35b-a3b-v1-mtp-q4_0_rocmfp4*)
+      printf '%s\n' qwopus-35b-a3b-v1
+      ;;
+    *)
+      filename_stem "$rel" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+      ;;
+  esac
 }
 
 emit_model_section() {
@@ -288,7 +308,7 @@ emit_crown_halo_mtp_dynamic_variants() {
   emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off crown-dynamic-mtp
 }
 
-emit_chadrock_rocmfp4_section() {
+emit_rocmfp4_mtp_section() {
   local id="$1"
   local model_path="$2"
   local reasoning="$3"
@@ -322,12 +342,13 @@ emit_chadrock_rocmfp4_section() {
   printf 'mmap = off\n'
 }
 
-emit_chadrock_rocmfp4_variants() {
+emit_rocmfp4_mtp_variants() {
   local id="$1"
   local model_path="$2"
+  local alias_base="$3"
 
-  emit_chadrock_rocmfp4_section "$id:mtp" "$model_path" on chadrock-35b-ace-saber
-  emit_chadrock_rocmfp4_section "$id:mtp:non-reasoning" "$model_path" off chadrock-35b-ace-saber-non-reasoning
+  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" on "$alias_base"
+  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" off "$alias_base-non-reasoning"
 }
 
 emit_non_reasoning_section() {
@@ -390,10 +411,10 @@ while IFS= read -r host_file; do
   fi
 
   if (( ROCMFP4_ONLY )); then
-    if ! is_chadrock_rocmfp4_model "$rel"; then
+    if ! is_rocmfp4_llamacpp_model "$rel"; then
       continue
     fi
-  elif is_rocmfp4_model "$rel"; then
+  elif is_rocmfp4_llamacpp_model "$rel"; then
     continue
   fi
 
@@ -417,8 +438,8 @@ while IFS= read -r host_file; do
     continue
   fi
 
-  if is_chadrock_rocmfp4_model "$rel"; then
-    emit_chadrock_rocmfp4_variants "$id" "$model_path" >> "$tmp_output"
+  if is_rocmfp4_llamacpp_model "$rel"; then
+    emit_rocmfp4_mtp_variants "$id" "$model_path" "$(rocmfp4_alias_base "$rel")" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
   fi
@@ -443,7 +464,7 @@ while IFS= read -r host_file; do
 done < <(find -L "$MODELS_DIR" -type f -name '*.gguf' -printf '%p\n' | sort)
 
 if (( model_count == 0 )) && (( ROCMFP4_ONLY )); then
-  echo "generate-models-preset: warning: no Chadrock ROCmFP4 GGUF models found under $MODELS_DIR" >&2
+  echo "generate-models-preset: warning: no ROCmFP4 llama.cpp GGUF models found under $MODELS_DIR" >&2
 elif (( model_count == 0 )); then
   echo "generate-models-preset: warning: no non-mmproj GGUF models found under $MODELS_DIR" >&2
 fi

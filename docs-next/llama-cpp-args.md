@@ -58,18 +58,19 @@ and `batch-size = 2048` / `ubatch-size = 512` directly in the model sections.
 The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model.
 
-The generated `jcbtc/chadrock-35b-ace-saber-rocmfp4-mtp` routes are another
-exception and require a custom fork image, not stock llama.cpp. Use
-`vulkan-rfp4` for Vulkan, `rocm-rfp4` for stable ROCm, or `rocm-next-rfp4` for
-ROCm nightlies.
+The generated ROCmFP4 MTP routes are another exception and require a custom
+fork image, not stock llama.cpp. Use `vulkan-rfp4` for Vulkan, `rocm-rfp4` for
+stable ROCm, or `rocm-next-rfp4` for ROCm nightlies.
 They keep the author profile in the model sections: `ctx-size = 262144`,
 `parallel = 1`, backend-specific `device` / `spec-draft-device`
 (`Vulkan0` for `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `batch-size = 512`,
 `ubatch-size = 512`, `threads = 16`, `threads-batch = 32`,
 `cache-type-k/v = q8_0`, `spec-type = draft-mtp`, `spec-draft-type-k/v = q4_0`,
 `spec-draft-n-max = 3`, `spec-draft-p-split = 0.10`, metrics enabled, and
-`mmap = off`. `bin/run.sh` sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` and
-`GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for the ROCm RFP4 backends.
+`mmap = off`. The generator emits reasoning-on and `-non-reasoning` aliases
+for each known compatible ROCmFP4 model. `bin/run.sh` sets
+`HSA_OVERRIDE_GFX_VERSION=11.5.1` and `GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for
+the ROCm RFP4 backends.
 
 ## Mental Model
 

@@ -66,7 +66,7 @@ through `ldconfig` instead. Use `LLAMA_REF` only for testing, bisects, or
 deliberately preserved test builds across stock backends. The default
 repository is `ggml-org/llama.cpp`, matching the current canonical upstream
 after the old `ggerganov` path began redirecting. The `*-rfp4` targets are
-isolated because Chadrock ROCmFP4 GGUFs require
+isolated because ROCmFP4 GGUFs require
 `charlie12345/rocmfp4-llama`; all RFP4 targets default to branch
 `mtp-rocmfp4-strix` pinned at `a00689039fb26b8ae91e0425b7416bb04f7f15bb`.
 
