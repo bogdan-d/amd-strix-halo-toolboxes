@@ -81,6 +81,7 @@ EOF
 }
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=./env-defaults.sh
 source "$PROJECT_ROOT/bin/env-defaults.sh"
 ENV_FILE="$PROJECT_ROOT/.env"
 ENV_NAMES=()
@@ -250,19 +251,19 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=512
     DEFAULT_UBATCH=512
     ;;
-  rocm-next-*|rocm7-nightlies-*)
-    BACKEND_FAMILY="rocm-next"
-    IMAGE_TAG="$BACKEND_INPUT"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=4096
-    DEFAULT_UBATCH=2048
-    ;;
   rocm-next-rfp4-*)
     BACKEND_FAMILY="rocm-next-rfp4"
     IMAGE_TAG="$BACKEND_INPUT"
     DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
     DEFAULT_BATCH=512
     DEFAULT_UBATCH=512
+    ;;
+  rocm-next-*|rocm7-nightlies-*)
+    BACKEND_FAMILY="rocm-next"
+    IMAGE_TAG="$BACKEND_INPUT"
+    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
+    DEFAULT_BATCH=4096
+    DEFAULT_UBATCH=2048
     ;;
   rocm-rfp4-*)
     BACKEND_FAMILY="rocm-rfp4"
