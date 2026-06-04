@@ -1,7 +1,9 @@
 # Building Next-Workflow Images
 
-Build from the repository root. The next workflow uses one Containerfile for
-ROCm and Vulkan images and selects the build with `BUILD_TYPE`.
+Build from the repository root. The next workflow uses
+`containers/Containerfile` for stock ROCm/Vulkan images and
+`containers/Containerfile.rocmfp4` for the custom ROCmFP4 llama.cpp fork
+targets.
 
 ## Quick Start
 
@@ -68,6 +70,13 @@ Override the image prefix:
 
 ```bash
 IMAGE_PREFIX=localhost/strix-halo bin/build.sh rocm
+```
+
+Override Containerfile paths:
+
+```bash
+CONTAINERFILE=containers/Containerfile bin/build.sh rocm
+ROCMFP4_CONTAINERFILE=containers/Containerfile.rocmfp4 bin/build.sh rocmfp4-llama
 ```
 
 Rebuild without using cached image layers, while keeping the Buildah storage and
@@ -188,7 +197,7 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
   -t localhost/amd-strix-halo-toolboxes:rocmfp4-llama \
-  -f containers/Containerfile .
+  -f containers/Containerfile.rocmfp4 .
 ```
 
 For ROCmFP4 llama.cpp on ROCm nightlies:
@@ -200,7 +209,7 @@ buildah bud --pull --format oci --layers \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
   --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
   -t localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next \
-  -f containers/Containerfile .
+  -f containers/Containerfile.rocmfp4 .
 ```
 
 For Vulkan:
@@ -212,13 +221,14 @@ buildah bud --pull --format oci --layers \
   -f containers/Containerfile .
 ```
 
-The Containerfile uses Buildah cache mounts for DNF packages, ROCm nightly
-tarballs, and the shared llama.cpp checkout. It builds only the runtime targets
-used by the next workflow: `llama-server`, `llama-cli`, `llama-bench`, and
-`llama-gguf-split`. It also copies the shared patch and helper assets from
-`toolboxes/`. Each build resets the cached llama.cpp worktree before switching
-refs and applying local patches, so dirty source files left by one backend do
-not break the next backend build.
+The Containerfiles use Buildah cache mounts for DNF packages, ROCm nightly
+tarballs, and llama.cpp checkouts. Stock and ROCmFP4 builds use separate
+llama.cpp source caches so the fork branch does not churn the stock worktree.
+They build only the runtime targets used by the next workflow: `llama-server`,
+`llama-cli`, `llama-bench`, and `llama-gguf-split`. They also copy the shared
+patch and helper assets from `toolboxes/`. Each build resets the cached
+llama.cpp worktree before switching refs and applying local patches, so dirty
+source files left by one backend do not break the next backend build.
 
 ## Smoke Tests
 

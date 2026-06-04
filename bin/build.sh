@@ -9,7 +9,10 @@ Usage:
 Environment:
   BUILDER            buildah or podman. Default: buildah
   IMAGE_PREFIX       Image repository prefix. Default: localhost/amd-strix-halo-toolboxes
-  CONTAINERFILE      Containerfile path. Default: containers/Containerfile
+  CONTAINERFILE      Stock Containerfile path. Default: containers/Containerfile
+  ROCMFP4_CONTAINERFILE
+                     ROCmFP4 Containerfile path.
+                     Default: containers/Containerfile.rocmfp4
   ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.4
   LLAMA_REPO         llama.cpp repository for stock backends.
                      Default: https://github.com/ggml-org/llama.cpp.git
@@ -57,6 +60,7 @@ load_dotenv_defaults "$PROJECT_ROOT/.env"
 BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/amd-strix-halo-toolboxes}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
+ROCMFP4_CONTAINERFILE="${ROCMFP4_CONTAINERFILE:-containers/Containerfile.rocmfp4}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 LLAMA_REPO="${LLAMA_REPO:-https://github.com/ggml-org/llama.cpp.git}"
 LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
@@ -183,11 +187,13 @@ build_image() {
   local cache_args=()
   local no_cache_args=()
   local cmd=()
+  local containerfile="$CONTAINERFILE"
   local llama_repo="$LLAMA_REPO"
   local llama_branch="$LLAMA_BRANCH"
   local llama_ref="$LLAMA_REF"
 
   if [[ "$build_type" == rocmfp4-llama* ]]; then
+    containerfile="$ROCMFP4_CONTAINERFILE"
     llama_repo="$ROCMFP4_LLAMA_REPO"
     llama_branch="$ROCMFP4_LLAMA_BRANCH"
     llama_ref="$ROCMFP4_LLAMA_REF"
@@ -272,7 +278,7 @@ build_image() {
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
-      -f "$CONTAINERFILE" \
+      -f "$containerfile" \
       "${BUILD_EXTRA[@]}" \
       .)
   else
@@ -291,7 +297,7 @@ build_image() {
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
-      -f "$CONTAINERFILE" \
+      -f "$containerfile" \
       "${BUILD_EXTRA[@]}" \
       .)
   fi

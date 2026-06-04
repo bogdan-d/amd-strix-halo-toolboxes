@@ -41,7 +41,7 @@ The local branch adds the next-workflow surface:
 
 ## Container Targets
 
-The shared Containerfile currently supports five build types:
+The next workflow currently supports five build types across two Containerfiles:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
@@ -50,6 +50,11 @@ The shared Containerfile currently supports five build types:
 | `rocmfp4-llama` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
 | `rocmfp4-llama-next` | `localhost/amd-strix-halo-toolboxes:rocmfp4-llama-next` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 | `vulkan` | `localhost/amd-strix-halo-toolboxes:vulkan` | Fedora Mesa RADV Vulkan runtime. |
+
+`containers/Containerfile` is the stock llama.cpp build path for `rocm`,
+`rocm-next`, and `vulkan`. `containers/Containerfile.rocmfp4` is the isolated
+ROCmFP4 fork build path for `rocmfp4-llama` and `rocmfp4-llama-next`, with a
+separate llama.cpp source cache.
 
 The stock targets follow the same llama.cpp source line by default. The old ROCm-only
 `95405ac65` pin worked around Strix Halo ROCm model-load crashes while the
@@ -74,6 +79,8 @@ Important behavior added locally:
 - target aliases such as `rocm`, `rocm=7.2.4`, `rocm-next`,
   `rocmfp4-llama`, `rocmfp4-llama-next`, `rocm7-nightlies`, `vulkan`, and
   `vulkan-radv`;
+- automatic Containerfile selection: stock targets use `containers/Containerfile`
+  and ROCmFP4 targets use `containers/Containerfile.rocmfp4`;
 - `LLAMA_REF` to optionally pin llama.cpp across stock backends for tests,
   bisects, or preserved builds;
 - `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, and `ROCMFP4_LLAMA_REF` for
