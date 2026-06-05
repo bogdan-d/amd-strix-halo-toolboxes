@@ -215,6 +215,14 @@ server run:
 bin/run.sh --with-non-reasoning --with-vision --with-configs rocm server
 ```
 
+Set `UPDATE_CONFIGS=1` in `.env` or the environment to also merge those
+generated configs into existing user config files automatically after
+`--with-configs` refreshes `coding-tool-configs/`:
+
+```bash
+UPDATE_CONFIGS=1 bin/run.sh --with-non-reasoning --with-vision --with-configs rocm server
+```
+
 The same flag works when saving a generated preset directly:
 
 ```bash

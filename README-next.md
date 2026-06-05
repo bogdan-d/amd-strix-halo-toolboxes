@@ -47,6 +47,10 @@ bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs 
 This writes Kilo Code, OpenCode, Pi, and VS Code config files under
 `coding-tool-configs/`.
 
+When using `bin/run.sh --with-configs`, set `UPDATE_CONFIGS=1` in `.env` or the
+environment to automatically merge the generated configs into existing user
+config files after `coding-tool-configs/` is refreshed.
+
 For a bounded model-load smoke test that stops the server automatically:
 
 ```bash

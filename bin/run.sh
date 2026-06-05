@@ -64,6 +64,8 @@ Environment:
                         Seconds to wait for load-test. Default: 120
   HF_CACHE_DIR          Host Hugging Face cache directory. Default: ~/.cache/huggingface
   HF_HOME               Container Hugging Face cache directory. Default: /root/.cache/huggingface
+  UPDATE_CONFIGS        With --with-configs, also merge generated configs into
+                        existing user configs when set to 1. Default: 0
   PODMAN_CONTAINER      Existing container name/id to use for shell
   PODMAN_NAME           Container name for new shell/server containers
   PODMAN_NAME_PREFIX    Container name prefix. Default: amd-strix-halo-llama
@@ -106,10 +108,16 @@ collect_env_names() {
 collect_env_names "$ENV_FILE"
 load_dotenv_defaults "$ENV_FILE"
 
+WITH_CONFIGS=0
 GENERATE_MODELS_PRESET_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --with-non-reasoning|--with-vision|--with-configs)
+    --with-non-reasoning|--with-vision)
+      GENERATE_MODELS_PRESET_ARGS+=("$1")
+      shift
+      ;;
+    --with-configs)
+      WITH_CONFIGS=1
       GENERATE_MODELS_PRESET_ARGS+=("$1")
       shift
       ;;
@@ -587,11 +595,20 @@ generate_models_preset_file() {
     "$CONTAINER_MODELS_DIR" \
     "$LLAMA_MODELS_TEMPLATE" \
     "$output"
+  update_user_configs_if_requested
 
   GENERATED_MODELS_PRESET="$output"
   trap cleanup_generated_models_preset EXIT
   VOLUME_ARGS+=(--volume "$GENERATED_MODELS_PRESET:$GENERATED_MODELS_PRESET_CONTAINER:ro")
   echo "run.sh: generated models preset=$GENERATED_MODELS_PRESET from template=$LLAMA_MODELS_TEMPLATE" >&2
+}
+
+update_user_configs_if_requested() {
+  if (( WITH_CONFIGS )) && [[ "${UPDATE_CONFIGS:-0}" == "1" ]]; then
+    echo "run.sh: UPDATE_CONFIGS=1; applying generated coding-tool configs" >&2
+    "$PROJECT_ROOT/bin/update-user-configs.ts" \
+      --generated-root "$PROJECT_ROOT/coding-tool-configs" >&2
+  fi
 }
 
 list_models_preset() {
@@ -625,6 +642,7 @@ list_generated_models_preset() {
         [[ "$section" == "*" ]] && continue
         printf '%s\n' "$section"
       done
+  update_user_configs_if_requested
 }
 
 case "$ACTION" in
