@@ -72,6 +72,12 @@ for each known compatible ROCmFP4 model. `bin/run.sh` sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` and `GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for
 the ROCm RFP4 backends.
 
+`plunderstruck/Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` has a model-card-specific
+profile: `batch-size = 2048`, `ubatch-size = 256`, f16 main and draft KV,
+`ctx-checkpoints = 32`, `threads-batch = 16`, `reasoning-format = deepseek`
+for the reasoning route, and `reasoning-format = none` for the off-thinking
+coding route.
+
 ## Mental Model
 
 Most flags fall into these decisions:

@@ -142,10 +142,19 @@ profile emits exactly two single-slot MTP routes per compatible model: one
 alias with reasoning enabled and one `-non-reasoning` alias with reasoning
 disabled. Known aliases include `chadrock-35b-ace-saber`,
 `chadrock-35b-uncensored`, `qwopus-27b-v2-chadrock`, `qwopus-27b-v2`, and
-`qwopus-35b-a3b-v1`. Both routes keep the author profile in the model section:
+`qwopus-35b-a3b-v1`.
+Both routes keep the author profile in the model section:
 262144 context, backend-specific device selection (`Vulkan0` for
 `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `b512/u512`, `q8_0` main KV, `q4_0`
 draft KV, `draft-mtp` depth 3, metrics, and `mmap` off.
+`plunderstruck/Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` is a model-card
+exception: its generated aliases are `qwopus3.6-27b-coder-rocmfp4-mtp` and
+`qwopus3.6-27b-coder-rocmfp4-mtp-non-reasoning`, with `b2048/u256`, f16 main
+and draft KV, 32 context checkpoints, `threads-batch = 16`, and DeepSeek
+reasoning format for the reasoning-on route. GGUFs with `headQ6` in the
+filename get `qwopus3.6-27b-coder-rocmfp4-headq6-mtp` and
+`qwopus3.6-27b-coder-rocmfp4-headq6-mtp-non-reasoning` aliases to avoid router
+conflicts without embedding the full filename.
 
 `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
 MTP profile. The generator always emits exactly two routes for it, regardless

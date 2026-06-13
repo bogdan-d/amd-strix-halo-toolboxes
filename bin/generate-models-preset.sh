@@ -212,6 +212,11 @@ is_rocmfp4_llamacpp_model() {
     [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]]
 }
 
+is_qwopus_27b_coder_rocmfp4_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Qq]wopus3\.6-27[Bb]-[Cc]oder-[Mm][Tt][Pp]-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+}
+
 rocmfp4_alias_base() {
   local rel="$1"
 
@@ -351,6 +356,68 @@ emit_rocmfp4_mtp_variants() {
   emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" off "$alias_base-non-reasoning"
 }
 
+emit_qwopus_27b_coder_rocmfp4_section() {
+  local id="$1"
+  local model_path="$2"
+  local reasoning="$3"
+  local alias="$4"
+
+  emit_model_section "$id" "$model_path" "" 0
+  printf 'alias = %s\n' "$alias"
+  printf 'ctx-size = 262144\n'
+  printf 'reasoning = %s\n' "$reasoning"
+  if [[ "$reasoning" == "off" ]]; then
+    printf 'reasoning-format = none\n'
+  else
+    printf 'reasoning-format = deepseek\n'
+  fi
+  printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  printf 'parallel = 1\n'
+  printf 'jinja = true\n'
+  printf 'n-gpu-layers = 999\n'
+  printf 'flash-attn = on\n'
+  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'batch-size = 2048\n'
+  printf 'ubatch-size = 256\n'
+  printf 'threads = 16\n'
+  printf 'threads-batch = 16\n'
+  printf 'cache-type-k = f16\n'
+  printf 'cache-type-v = f16\n'
+  printf 'ctx-checkpoints = 32\n'
+  # This is not accepted by the current custom fork of llama.cpp
+  # printf 'checkpoint-min-step = 256\n'
+  printf 'cache-reuse = 256\n'
+  printf 'temp = 0.6\n'
+  printf 'top-p = 0.95\n'
+  printf 'top-k = 20\n'
+  printf 'min-p = 0.0\n'
+  printf 'spec-type = draft-mtp\n'
+  printf 'spec-draft-device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'spec-draft-ngl = all\n'
+  printf 'spec-draft-type-k = f16\n'
+  printf 'spec-draft-type-v = f16\n'
+  printf 'spec-draft-n-max = 3\n'
+  printf 'spec-draft-n-min = 0\n'
+  printf 'spec-draft-p-min = 0.0\n'
+  printf 'spec-draft-p-split = 0.10\n'
+  printf 'mmap = off\n'
+}
+
+emit_qwopus_27b_coder_rocmfp4_variants() {
+  local id="$1"
+  local model_path="$2"
+  local alias_base="qwopus3.6-27b-coder-rocmfp4"
+
+  case "${model_path##*/}" in
+    *headQ6*|*headq6*)
+      alias_base="$alias_base-headq6"
+      ;;
+  esac
+
+  emit_qwopus_27b_coder_rocmfp4_section "$id:mtp" "$model_path" on "$alias_base-mtp"
+  emit_qwopus_27b_coder_rocmfp4_section "$id:mtp:non-reasoning" "$model_path" off "$alias_base-mtp-non-reasoning"
+}
+
 emit_non_reasoning_section() {
   local id="$1"
   local model_path="$2"
@@ -439,6 +506,12 @@ while IFS= read -r host_file; do
   fi
 
   if is_rocmfp4_llamacpp_model "$rel"; then
+    if is_qwopus_27b_coder_rocmfp4_model "$rel"; then
+      emit_qwopus_27b_coder_rocmfp4_variants "$id" "$model_path" >> "$tmp_output"
+      model_count=$((model_count + 1))
+      continue
+    fi
+
     emit_rocmfp4_mtp_variants "$id" "$model_path" "$(rocmfp4_alias_base "$rel")" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
