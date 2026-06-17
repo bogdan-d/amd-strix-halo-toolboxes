@@ -25,7 +25,13 @@ Environment:
                      llama.cpp fork branch for RFP4 targets.
                      Default: mtp-rocmfp4-strix
   ROCMFP4_LLAMA_REF  llama.cpp fork ref for RFP4 targets.
-                     Default: a00689039fb26b8ae91e0425b7416bb04f7f15bb
+                     Default: 8e0c08eefb4832d8d67ac27fdb391924b60485a8
+  ROCM_NIGHTLY_TARBALL
+                     TheRock tarball for rocm-next targets. Default:
+                     therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
+                     Set empty to resolve the latest available tarball.
+  ROCMFP4_ROCM_NIGHTLY_TARBALL
+                     Deprecated alias for ROCM_NIGHTLY_TARBALL.
   CPU_TARGET         generic, strix-halo, or native. Default: generic
   TAG_VERSION        Also tag stable ROCm as rocm-$ROCM_VERSION. Default: 1
   TAG_NIGHTLY_ALIAS  Also tag rocm-next as rocm7-nightlies. Default: 1
@@ -68,7 +74,8 @@ LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
 LLAMA_REF="${LLAMA_REF:-}"
 ROCMFP4_LLAMA_REPO="${ROCMFP4_LLAMA_REPO:-https://github.com/charlie12345/rocmfp4-llama.git}"
 ROCMFP4_LLAMA_BRANCH="${ROCMFP4_LLAMA_BRANCH:-mtp-rocmfp4-strix}"
-ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-a00689039fb26b8ae91e0425b7416bb04f7f15bb}"
+ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-8e0c08eefb4832d8d67ac27fdb391924b60485a8}"
+ROCM_NIGHTLY_TARBALL="${ROCM_NIGHTLY_TARBALL-${ROCMFP4_ROCM_NIGHTLY_TARBALL-therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz}}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
 TAG_NIGHTLY_ALIAS="${TAG_NIGHTLY_ALIAS:-1}"
@@ -282,6 +289,7 @@ build_image() {
       --build-arg "LLAMA_REPO=$llama_repo" \
       --build-arg "LLAMA_BRANCH=$llama_branch" \
       --build-arg "LLAMA_REF=$llama_ref" \
+      --build-arg "ROCM_NIGHTLY_TARBALL=$ROCM_NIGHTLY_TARBALL" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
@@ -301,6 +309,7 @@ build_image() {
       --build-arg "LLAMA_REPO=$llama_repo" \
       --build-arg "LLAMA_BRANCH=$llama_branch" \
       --build-arg "LLAMA_REF=$llama_ref" \
+      --build-arg "ROCM_NIGHTLY_TARBALL=$ROCM_NIGHTLY_TARBALL" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
       "${cache_args[@]}" \
@@ -333,7 +342,7 @@ build_image() {
       /^>>> Already downloaded$/ { next }
       /^STEP [0-9]+\/[0-9]+:/ { print; fflush(); next }
       /^>>> / { print; fflush(); next }
-      /^Latest ROCm nightly tarball:/ { print; fflush(); next }
+      /^ROCm nightly tarball:/ { print; fflush(); next }
       /^COMMIT / { print; fflush(); next }
       /^Successfully tagged / { print; fflush(); next }
       /^CMake Warning/ { print; fflush(); cmake_warning_context = 8; next }

@@ -343,7 +343,7 @@ emit_rocmfp4_mtp_section() {
   printf 'spec-draft-n-min = 0\n'
   printf 'spec-draft-p-min = 0.0\n'
   printf 'spec-draft-p-split = 0.10\n'
-  printf 'metrics = true\n'
+  # printf 'metrics = true\n'
   printf 'mmap = off\n'
 }
 
@@ -378,7 +378,7 @@ emit_qwopus_27b_coder_rocmfp4_section() {
   printf 'flash-attn = on\n'
   printf 'device = %s\n' "$ROCMFP4_DEVICE"
   printf 'batch-size = 2048\n'
-  printf 'ubatch-size = 256\n'
+  printf 'ubatch-size = 512\n'
   printf 'threads = 16\n'
   printf 'threads-batch = 16\n'
   printf 'cache-type-k = f16\n'

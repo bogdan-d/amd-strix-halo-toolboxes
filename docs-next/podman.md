@@ -38,6 +38,14 @@ CPU_TARGET=strix-halo bin/run.sh rocm list-devices
 bin/run.sh vulkan list-devices
 ```
 
+For ROCm backends, a silent exit or exit status `139` means the process likely
+segfaulted before llama.cpp could print an error. Check the runtime first:
+
+```bash
+bin/run.sh rocm-next-rfp4 run rocminfo
+bin/run.sh rocm-next-rfp4 list-devices
+```
+
 `bin/run.sh` uses same `CPU_TARGET` and `ROCM_VERSION` defaults as
 `bin/build.sh`, so non-generic image variants built with `CPU_TARGET=strix-halo`
 or `CPU_TARGET=native` can be run without spelling full tag each time:

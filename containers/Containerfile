@@ -11,6 +11,7 @@ ARG ROCM_VERSION=7.2.4
 ARG ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.4/main
 ARG ROCM_MAJOR_VERSION=7
 ARG ROCM_NIGHTLY_BASE_URL=https://therock-nightly-tarball.s3.amazonaws.com
+ARG ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
 ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
 ARG ROCWMMA_FATTN=0
@@ -26,6 +27,7 @@ ARG ROCM_VERSION
 ARG ROCM_REPO_URL
 ARG ROCM_MAJOR_VERSION
 ARG ROCM_NIGHTLY_BASE_URL
+ARG ROCM_NIGHTLY_TARBALL
 ARG GFX_TARGET
 ARG CPU_TARGET
 ARG ROCWMMA_FATTN
@@ -92,15 +94,20 @@ WORKDIR /tmp
 RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
   set -euo pipefail; \
+  if [ -n "${ROCM_NIGHTLY_TARBALL}" ]; then \
+  key="${ROCM_NIGHTLY_TARBALL}"; \
+  echo ">>> Using pinned ROCm nightly tarball"; \
+  else \
   echo ">>> Resolving latest ROCm nightly tarball"; \
   prefix="therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}"; \
   key="$(curl -fsSL "${ROCM_NIGHTLY_BASE_URL}?list-type=2&prefix=${prefix}" \
-  | tr '<' '\n' \
-  | grep -o "therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}\..*\.tar\.gz" \
-  | sort -V \
-  | tail -n1)"; \
+    | tr '<' '\n' \
+    | grep -o "therock-dist-linux-${GFX_TARGET}-${ROCM_MAJOR_VERSION}\..*\.tar\.gz" \
+    | sort -V \
+    | tail -n1)"; \
+  fi; \
   test -n "${key}"; \
-  echo "Latest ROCm nightly tarball: ${key}"; \
+  echo "ROCm nightly tarball: ${key}"; \
   if [ ! -f "/var/cache/rocm-nightly/${key}" ]; then \
   echo ">>> Downloading ROCm nightly tarball"; \
   aria2c -x 16 -s 16 -j 16 --file-allocation=none \
@@ -264,7 +271,6 @@ RUN if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
   find /opt/rocm -type f -name '*.a' -delete; \
   rm -rf \
   /opt/rocm/include \
-  /opt/rocm/share \
   /opt/rocm/llvm/include \
   /opt/rocm/llvm/share; \
   mkdir -p /opt/rocm-runtime; \
@@ -345,6 +351,9 @@ RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \
   && echo "/opt/rocm/lib" >> /etc/ld.so.conf.d/rocm.conf \
   && echo "/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf \
   && echo "/opt/rocm/llvm/lib" >> /etc/ld.so.conf.d/rocm.conf \
+  && echo "/opt/rocm/lib/rocm_sysdeps/lib" >> /etc/ld.so.conf.d/rocm.conf \
   && ldconfig
+
+ENV PATH=/opt/rocm/bin:/opt/rocm/llvm/bin:$PATH
 
 CMD ["/bin/bash"]

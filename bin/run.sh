@@ -490,12 +490,41 @@ log_command() {
   printf '\n' >&2
 }
 
+report_command_failure() {
+  local status="$1"
+  local container_name="$2"
+  shift 2
+
+  printf 'run.sh: command failed with exit status %s\n' "$status" >&2
+  printf 'run.sh: image=%s container=%s action=%s backend=%s\n' "$IMAGE" "$container_name" "$ACTION" "$BACKEND_FAMILY" >&2
+  log_command "$@"
+
+  case "$status" in
+    139)
+      echo "run.sh: exit 139 usually means the process segfaulted before it could print an error." >&2
+      if [[ "$BACKEND_FAMILY" == rocm* ]]; then
+        echo "run.sh: ROCm diagnostic: try 'bin/run.sh $BACKEND run rocminfo' and 'bin/run.sh $BACKEND list-devices'." >&2
+      fi
+      ;;
+    125|126|127)
+      echo "run.sh: Podman or container command setup failed before the requested process could run." >&2
+      ;;
+  esac
+}
+
 run_logged() {
   local container_name="$1"
+  local status
   shift
   log_selection "$container_name"
   log_command "$@"
-  "$@"
+  if "$@"; then
+    return 0
+  else
+    status=$?
+    report_command_failure "$status" "$container_name" "$@"
+    return "$status"
+  fi
 }
 
 exec_logged() {

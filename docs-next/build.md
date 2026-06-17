@@ -81,6 +81,20 @@ CONTAINERFILE=containers/Containerfile bin/build.sh rocm
 ROCMFP4_CONTAINERFILE=containers/Containerfile.rocmfp4 bin/build.sh rocm-rfp4
 ```
 
+`rocm-next` and `rocm-next-rfp4` pin their TheRock runtime tarball by default
+because the newest nightly can regress GPU discovery independently of llama.cpp.
+Override the pin, or set it empty to resolve the newest available tarball:
+
+```bash
+ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.14.0a20260612.tar.gz \
+  bin/build.sh rocm-next-rfp4
+
+ROCM_NIGHTLY_TARBALL= bin/build.sh rocm-next-rfp4
+```
+
+`ROCMFP4_ROCM_NIGHTLY_TARBALL` remains accepted as a deprecated alias for the
+RFP4 workflow.
+
 Rebuild without using cached image layers, while keeping the Buildah storage and
 cache mount contents intact:
 
@@ -123,7 +137,7 @@ LLAMA_REF=95405ac65 bin/build.sh rocm
 The ROCmFP4 targets are isolated from those stock defaults. They build
 `https://github.com/charlie12345/rocmfp4-llama.git` branch
 `mtp-rocmfp4-strix` pinned to
-`a00689039fb26b8ae91e0425b7416bb04f7f15bb`. Override
+`8e0c08eefb4832d8d67ac27fdb391924b60485a8`. Override
 `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, or `ROCMFP4_LLAMA_REF` only when
 testing a new fork build:
 
@@ -186,6 +200,7 @@ For nightly ROCm:
 ```bash
 buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-next \
+  --build-arg ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz \
   -t localhost/strix-llama:rocm-next \
   -t localhost/strix-llama:rocm7-nightlies \
   -f containers/Containerfile .
@@ -198,7 +213,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=vulkan-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
+  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
   -t localhost/strix-llama:vulkan-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
@@ -210,7 +225,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
+  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
   -t localhost/strix-llama:rocm-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
@@ -222,7 +237,8 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-next-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=a00689039fb26b8ae91e0425b7416bb04f7f15bb \
+  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
+  --build-arg ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz \
   -t localhost/strix-llama:rocm-next-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
@@ -244,6 +260,12 @@ They build only the runtime targets used by the next workflow: `llama-server`,
 patch and helper assets from `toolboxes/`. Each build resets the cached
 llama.cpp worktree before switching refs and applying local patches, so dirty
 source files left by one backend do not break the next backend build.
+
+`rocm-next` and `rocm-next-rfp4` copy the pinned TheRock ROCm runtime from the
+builder stage. The runtime images keep `/opt/rocm/share`, register
+`/opt/rocm/lib/rocm_sysdeps/lib` with `ldconfig`, and expose `/opt/rocm/bin` on
+`PATH`; those pieces are required for ROCm tools such as `rocminfo` to
+initialize instead of failing before llama.cpp can print a useful error.
 
 ## Smoke Tests
 
