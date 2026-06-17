@@ -217,10 +217,18 @@ is_qwopus_27b_coder_rocmfp4_model() {
   [[ "$rel" =~ [Qq]wopus3\.6-27[Bb]-[Cc]oder-[Mm][Tt][Pp]-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
 }
 
+is_nex_n2_mini_rocmfp4_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Nn]ex-[Nn]2-mini-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+}
+
 rocmfp4_alias_base() {
   local rel="$1"
 
   case "$rel" in
+    *Nex-N2-mini-ROCmFP4*|*nex-n2-mini-rocmfp4*)
+      printf '%s\n' nex-n2-mini
+      ;;
     *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
       printf '%s\n' chadrock-35b-ace-saber
       ;;
@@ -313,80 +321,73 @@ emit_crown_halo_mtp_dynamic_variants() {
   emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off crown-dynamic-mtp
 }
 
-emit_rocmfp4_mtp_section() {
+emit_nex_n2_mini_rocmfp4_section() {
   local id="$1"
   local model_path="$2"
-  local reasoning="$3"
-  local alias="$4"
+  local alias="$3"
 
   emit_model_section "$id" "$model_path" "" 0
   printf 'alias = %s\n' "$alias"
-  printf 'ctx-size = 262144\n'
-  printf 'reasoning = %s\n' "$reasoning"
-  printf 'parallel = 1\n'
-  printf 'jinja = true\n'
-  printf 'n-gpu-layers = 999\n'
-  printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFP4_DEVICE"
-  printf 'batch-size = 512\n'
-  printf 'ubatch-size = 512\n'
-  printf 'threads = 16\n'
-  printf 'threads-batch = 32\n'
-  printf 'cache-type-k = q8_0\n'
-  printf 'cache-type-v = q8_0\n'
-  printf 'spec-type = draft-mtp\n'
-  printf 'spec-draft-device = %s\n' "$ROCMFP4_DEVICE"
-  printf 'spec-draft-ngl = all\n'
-  printf 'spec-draft-type-k = q4_0\n'
-  printf 'spec-draft-type-v = q4_0\n'
-  printf 'spec-draft-n-max = 3\n'
-  printf 'spec-draft-n-min = 0\n'
-  printf 'spec-draft-p-min = 0.0\n'
-  printf 'spec-draft-p-split = 0.10\n'
-  # printf 'metrics = true\n'
-  printf 'mmap = off\n'
-}
-
-emit_rocmfp4_mtp_variants() {
-  local id="$1"
-  local model_path="$2"
-  local alias_base="$3"
-
-  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" on "$alias_base"
-  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" off "$alias_base-non-reasoning"
-}
-
-emit_qwopus_27b_coder_rocmfp4_section() {
-  local id="$1"
-  local model_path="$2"
-  local reasoning="$3"
-  local alias="$4"
-
-  emit_model_section "$id" "$model_path" "" 0
-  printf 'alias = %s\n' "$alias"
-  printf 'ctx-size = 262144\n'
-  printf 'reasoning = %s\n' "$reasoning"
-  if [[ "$reasoning" == "off" ]]; then
-    printf 'reasoning-format = none\n'
-  else
-    printf 'reasoning-format = deepseek\n'
-  fi
-  printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  printf 'ctx-size = 131072\n'
+  printf 'reasoning = off\n'
   printf 'parallel = 1\n'
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
   printf 'device = %s\n' "$ROCMFP4_DEVICE"
   printf 'batch-size = 2048\n'
-  printf 'ubatch-size = 512\n'
+  printf 'ubatch-size = 256\n'
   printf 'threads = 16\n'
   printf 'threads-batch = 16\n'
   printf 'cache-type-k = f16\n'
   printf 'cache-type-v = f16\n'
   printf 'ctx-checkpoints = 32\n'
-  # This is not accepted by the current custom fork of llama.cpp
-  # printf 'checkpoint-min-step = 256\n'
   printf 'cache-reuse = 256\n'
+  printf 'cache-ram = 65536\n'
+  printf 'temp = 0.6\n'
+  printf 'top-p = 0.95\n'
+  printf 'top-k = 20\n'
+  printf 'min-p = 0.0\n'
+  printf 'metrics = true\n'
+  printf 'mmap = off\n'
+}
+
+emit_rocmfp4_mtp_section() {
+  local id="$1"
+  local model_path="$2"
+  local mmproj_path="$3"
+  local reasoning="$4"
+  local alias="$5"
+  local thinking="$6"
+
+  emit_model_section "$id" "$model_path" "$mmproj_path" 0
+  printf 'alias = %s\n' "$alias"
+  printf 'ctx-size = 262144\n'
+  printf 'reasoning = %s\n' "$reasoning"
+  if [[ "$thinking" == "off" ]]; then
+    printf 'reasoning-format = deepseek\n'
+    printf 'chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}\n'
+  elif [[ "$reasoning" == "off" ]]; then
+    printf 'reasoning-format = none\n'
+    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  else
+    printf 'reasoning-format = deepseek\n'
+    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  fi
+  printf 'parallel = 1\n'
+  printf 'jinja = true\n'
+  printf 'n-gpu-layers = 999\n'
+  printf 'flash-attn = on\n'
+  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'batch-size = 2048\n'
+  printf 'ubatch-size = 256\n'
+  printf 'threads = 16\n'
+  printf 'threads-batch = 16\n'
+  printf 'cache-type-k = f16\n'
+  printf 'cache-type-v = f16\n'
+  printf 'ctx-checkpoints = 32\n'
+  printf 'cache-reuse = 256\n'
+  printf 'cache-ram = 65536\n'
   printf 'temp = 0.6\n'
   printf 'top-p = 0.95\n'
   printf 'top-k = 20\n'
@@ -396,26 +397,26 @@ emit_qwopus_27b_coder_rocmfp4_section() {
   printf 'spec-draft-ngl = all\n'
   printf 'spec-draft-type-k = f16\n'
   printf 'spec-draft-type-v = f16\n'
-  printf 'spec-draft-n-max = 3\n'
+  printf 'spec-draft-n-max = 5\n'
   printf 'spec-draft-n-min = 0\n'
   printf 'spec-draft-p-min = 0.0\n'
   printf 'spec-draft-p-split = 0.10\n'
+  printf 'metrics = true\n'
   printf 'mmap = off\n'
+  if [[ -n "$mmproj_path" ]]; then
+    printf 'image-min-tokens = 1024\n'
+  fi
 }
 
-emit_qwopus_27b_coder_rocmfp4_variants() {
+emit_rocmfp4_mtp_variants() {
   local id="$1"
   local model_path="$2"
-  local alias_base="qwopus3.6-27b-coder-rocmfp4"
+  local alias_base="$3"
+  local mmproj_path="$4"
+  local thinking="${5:-on}"
 
-  case "${model_path##*/}" in
-    *headQ6*|*headq6*)
-      alias_base="$alias_base-headq6"
-      ;;
-  esac
-
-  emit_qwopus_27b_coder_rocmfp4_section "$id:mtp" "$model_path" on "$alias_base-mtp"
-  emit_qwopus_27b_coder_rocmfp4_section "$id:mtp:non-reasoning" "$model_path" off "$alias_base-mtp-non-reasoning"
+  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$alias_base" "$thinking"
+  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$alias_base-non-reasoning" "$thinking"
 }
 
 emit_non_reasoning_section() {
@@ -506,13 +507,24 @@ while IFS= read -r host_file; do
   fi
 
   if is_rocmfp4_llamacpp_model "$rel"; then
-    if is_qwopus_27b_coder_rocmfp4_model "$rel"; then
-      emit_qwopus_27b_coder_rocmfp4_variants "$id" "$model_path" >> "$tmp_output"
+    alias_base="$(rocmfp4_alias_base "$rel")"
+    if is_nex_n2_mini_rocmfp4_model "$rel"; then
+      emit_nex_n2_mini_rocmfp4_section "$id" "$model_path" "$alias_base" >> "$tmp_output"
       model_count=$((model_count + 1))
       continue
     fi
 
-    emit_rocmfp4_mtp_variants "$id" "$model_path" "$(rocmfp4_alias_base "$rel")" >> "$tmp_output"
+    thinking=on
+    if is_qwopus_27b_coder_rocmfp4_model "$rel"; then
+      thinking=off
+    fi
+    emit_rocmfp4_mtp_variants "$id" "$model_path" "$alias_base" "" "$thinking" >> "$tmp_output"
+    if (( WITH_VISION )); then
+      mmproj_path="$(find_mmproj "$host_file" "$rel")"
+      if [[ -n "$mmproj_path" ]]; then
+        emit_rocmfp4_mtp_variants "$id:vision" "$model_path" "$alias_base-vision" "$mmproj_path" "$thinking" >> "$tmp_output"
+      fi
+    fi
     model_count=$((model_count + 1))
     continue
   fi

@@ -63,20 +63,24 @@ fork image, not stock llama.cpp. Use `vulkan-rfp4` for Vulkan, `rocm-rfp4` for
 stable ROCm, or `rocm-next-rfp4` for ROCm nightlies.
 They keep the author profile in the model sections: `ctx-size = 262144`,
 `parallel = 1`, backend-specific `device` / `spec-draft-device`
-(`Vulkan0` for `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `batch-size = 512`,
-`ubatch-size = 512`, `threads = 16`, `threads-batch = 32`,
-`cache-type-k/v = q8_0`, `spec-type = draft-mtp`, `spec-draft-type-k/v = q4_0`,
-`spec-draft-n-max = 3`, `spec-draft-p-split = 0.10`, metrics enabled, and
-`mmap = off`. The generator emits reasoning-on and `-non-reasoning` aliases
-for each known compatible ROCmFP4 model. `bin/run.sh` sets
+(`Vulkan0` for `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `batch-size = 2048`,
+`ubatch-size = 256`, `threads = 16`, `threads-batch = 16`,
+`cache-type-k/v = f16`, `ctx-checkpoints = 32`,
+`cache-reuse = 256`, `cache-ram = 65536`, `reasoning-format = deepseek` for
+reasoning-on routes, `spec-type = draft-mtp`, `spec-draft-type-k/v = f16`,
+`spec-draft-n-max = 5`, `spec-draft-p-split = 0.10`, metrics enabled, and
+`mmap = off`. The fork rejects `checkpoint-min-step` in model preset sections,
+so generated ROCmFP4 presets omit that direct-command `-cpent` setting. The
+generator emits reasoning-on and `-non-reasoning` aliases for each known
+compatible ROCmFP4 model. `--with-vision` adds `mmproj` plus
+`image-min-tokens = 1024` for paired Plunderstruck projectors. Qwopus3.6 Coder
+keeps the same runtime profile but adds the model-card thinking-off kwargs
+`{"enable_thinking": false, "preserve_thinking": true}` for agentic use.
+Nex-N2-mini keeps the same non-speculative runtime profile with
+`ctx-size = 131072` and no MTP/draft flags.
+`bin/run.sh` sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` and `GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for
 the ROCm RFP4 backends.
-
-`plunderstruck/Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` has a model-card-specific
-profile: `batch-size = 2048`, `ubatch-size = 256`, f16 main and draft KV,
-`ctx-checkpoints = 32`, `threads-batch = 16`, `reasoning-format = deepseek`
-for the reasoning route, and `reasoning-format = none` for the off-thinking
-coding route.
 
 ## Mental Model
 
