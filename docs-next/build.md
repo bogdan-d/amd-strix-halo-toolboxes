@@ -137,7 +137,7 @@ LLAMA_REF=95405ac65 bin/build.sh rocm
 The ROCmFP4 targets are isolated from those stock defaults. They build
 `https://github.com/charlie12345/rocmfp4-llama.git` branch
 `mtp-rocmfp4-strix` pinned to
-`8e0c08eefb4832d8d67ac27fdb391924b60485a8`. Override
+`4795079b04f5e0ada6e5d2e85b12bac1e27e7873`. Override
 `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, or `ROCMFP4_LLAMA_REF` only when
 testing a new fork build:
 
@@ -147,6 +147,18 @@ bin/build.sh rocm-rfp4
 bin/build.sh rocm-next-rfp4
 ROCMFP4_LLAMA_REF=mtp-rocmfp4-strix bin/build.sh rocm-rfp4
 ```
+
+The ROCmFP4 HIP builds follow the fork's Strix-oriented CMake defaults:
+`GGML_HIP=ON`, `GGML_HIP_FORCE_MMQ=ON`, `GGML_VULKAN=ON`, `GGML_CUDA=OFF`,
+and both `CMAKE_HIP_ARCHITECTURES` and `GPU_TARGETS` set to this repo's
+`GFX_TARGET`. The ROCmFP4 ROCm images therefore include Fedora Vulkan RADV
+packages as the fork-recommended fallback backend. Unlike the stock ROCm
+Containerfile, `containers/Containerfile.rocmfp4` does not add the local
+`-mllvm --amdgpu-unroll-threshold-local=600` HIP flag. It only passes
+`-Wno-nan-infinity-disabled` through `CMAKE_HIP_FLAGS` to suppress repeated
+Clang diagnostics from the fork's intentional HIP fast-math setting.
+The ROCmFP4 Vulkan build follows the fork's Vulkan-only defaults:
+`GGML_VULKAN=ON`, `GGML_HIP=OFF`, and `GGML_CUDA=OFF`.
 
 The default CPU target is `generic`, which disables host-native CPU detection so
 local and future GitHub runner builds do not silently differ. Use
@@ -213,7 +225,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=vulkan-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
+  --build-arg LLAMA_REF=4795079b04f5e0ada6e5d2e85b12bac1e27e7873 \
   -t localhost/strix-llama:vulkan-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
@@ -225,7 +237,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
+  --build-arg LLAMA_REF=4795079b04f5e0ada6e5d2e85b12bac1e27e7873 \
   -t localhost/strix-llama:rocm-rfp4 \
   -f containers/Containerfile.rocmfp4 .
 ```
@@ -237,7 +249,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-next-rfp4 \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git \
   --build-arg LLAMA_BRANCH=mtp-rocmfp4-strix \
-  --build-arg LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8 \
+  --build-arg LLAMA_REF=4795079b04f5e0ada6e5d2e85b12bac1e27e7873 \
   --build-arg ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz \
   -t localhost/strix-llama:rocm-next-rfp4 \
   -f containers/Containerfile.rocmfp4 .

@@ -25,7 +25,7 @@ Environment:
                      llama.cpp fork branch for RFP4 targets.
                      Default: mtp-rocmfp4-strix
   ROCMFP4_LLAMA_REF  llama.cpp fork ref for RFP4 targets.
-                     Default: 8e0c08eefb4832d8d67ac27fdb391924b60485a8
+                     Default: 4795079b04f5e0ada6e5d2e85b12bac1e27e7873
   ROCM_NIGHTLY_TARBALL
                      TheRock tarball for rocm-next targets. Default:
                      therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
@@ -74,7 +74,7 @@ LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
 LLAMA_REF="${LLAMA_REF:-}"
 ROCMFP4_LLAMA_REPO="${ROCMFP4_LLAMA_REPO:-https://github.com/charlie12345/rocmfp4-llama.git}"
 ROCMFP4_LLAMA_BRANCH="${ROCMFP4_LLAMA_BRANCH:-mtp-rocmfp4-strix}"
-ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-8e0c08eefb4832d8d67ac27fdb391924b60485a8}"
+ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-4795079b04f5e0ada6e5d2e85b12bac1e27e7873}"
 ROCM_NIGHTLY_TARBALL="${ROCM_NIGHTLY_TARBALL-${ROCMFP4_ROCM_NIGHTLY_TARBALL-therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz}}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"

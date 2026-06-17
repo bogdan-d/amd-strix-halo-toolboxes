@@ -17,7 +17,7 @@ ARG CPU_TARGET=generic
 ARG ROCWMMA_FATTN=0
 ARG LLAMA_REPO=https://github.com/charlie12345/rocmfp4-llama.git
 ARG LLAMA_BRANCH=mtp-rocmfp4-strix
-ARG LLAMA_REF=8e0c08eefb4832d8d67ac27fdb391924b60485a8
+ARG LLAMA_REF=4795079b04f5e0ada6e5d2e85b12bac1e27e7873
 
 # build stage
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
@@ -123,10 +123,10 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   ln -s ../lib/llvm/amdgcn/bitcode /opt/rocm/amdgcn/bitcode; \
   fi
 
-# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. No ROCm runtime is
-# copied for this target; llama.cpp is built with GGML_VULKAN below.
+# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. ROCmFP4 HIP builds
+# also enable Vulkan to match the fork's recommended fallback path.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan-rfp4" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan-rfp4" ] || [ "${BUILD_TYPE}" = "rocm-rfp4" ] || [ "${BUILD_TYPE}" = "rocm-next-rfp4" ]; then \
   echo ">>> Installing Vulkan RADV builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
@@ -207,10 +207,13 @@ RUN --mount=type=cache,id=llama-source-rocmfp4,target=/opt/llama.cpp \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
     -DGGML_HIP_FORCE_MMQ=ON \
+    -DGGML_VULKAN=ON \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     ${rocwmma_flags} \
     -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
-    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
+    -DGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
@@ -227,10 +230,13 @@ RUN --mount=type=cache,id=llama-source-rocmfp4,target=/opt/llama.cpp \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
     -DGGML_HIP_FORCE_MMQ=ON \
+    -DGGML_VULKAN=ON \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     ${rocwmma_flags} \
     -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
-    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
+    -DGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
@@ -246,6 +252,8 @@ RUN --mount=type=cache,id=llama-source-rocmfp4,target=/opt/llama.cpp \
   elif [ "${BUILD_TYPE}" = "vulkan-rfp4" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_VULKAN=ON \
+    -DGGML_HIP=OFF \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
@@ -339,9 +347,10 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
   fi
 
 # Vulkan RADV runtime: Mesa driver and Vulkan loader from Fedora. Only /dev/dri
-# is required at run time for this target.
+# is required at run time for Vulkan devices; ROCmFP4 HIP images include this as
+# the fork-recommended fallback backend.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan-rfp4" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan-rfp4" ] || [ "${BUILD_TYPE}" = "rocm-rfp4" ] || [ "${BUILD_TYPE}" = "rocm-next-rfp4" ]; then \
   echo ">>> Installing Vulkan RADV runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
