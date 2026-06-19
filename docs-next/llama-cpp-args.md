@@ -56,23 +56,29 @@ model-card exception to the shared defaults: they keep `ctx-size = 131072`,
 `spec-draft-type-k/v = f16`, `spec-draft-n-max = 4`, the Strix polling flags,
 and `batch-size = 2048` / `ubatch-size = 512` directly in the model sections.
 The generator always emits both reasoning-on and reasoning-off MTP routes for
-that model.
+that model, with display aliases such as
+`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)`.
 
-The generated ROCmFP4 MTP routes are another exception and require a custom
-fork image, not stock llama.cpp. Use `vulkan-rfp4` for Vulkan, `rocm-rfp4` for
+The generated ROCmFP4 routes are another exception and require a custom fork
+image, not stock llama.cpp. Use `vulkan-rfp4` for Vulkan, `rocm-rfp4` for
 stable ROCm, or `rocm-next-rfp4` for ROCm nightlies.
 They keep the author profile in the model sections: `ctx-size = 262144`,
-`parallel = 1`, backend-specific `device` / `spec-draft-device`
-(`Vulkan0` for `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `batch-size = 2048`,
-`ubatch-size = 256`, `threads = 16`, `threads-batch = 16`,
-`cache-type-k/v = f16`, `ctx-checkpoints = 32`,
-`cache-reuse = 256`, `cache-ram = 65536`, `reasoning-format = deepseek` for
-reasoning-on routes, `spec-type = draft-mtp`, `spec-draft-type-k/v = f16`,
-`spec-draft-n-max = 5`, `spec-draft-p-split = 0.10`, metrics enabled, and
-`mmap = off`. The fork rejects `checkpoint-min-step` in model preset sections,
-so generated ROCmFP4 presets omit that direct-command `-cpent` setting. The
-generator emits reasoning-on and `-non-reasoning` aliases for each known
-compatible ROCmFP4 model. `--with-vision` adds `mmproj` plus
+`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-rfp4`,
+`ROCm0` for ROCm RFP4), `batch-size = 2048`, `ubatch-size = 256`,
+`threads = 16`, `threads-batch = 16`, `cache-type-k/v = f16`,
+`ctx-checkpoints = 32`, `cache-reuse = 256`, `cache-ram = 65536`,
+`reasoning-format = deepseek` for reasoning-on routes, metrics enabled, and
+`mmap = off`. Only models identified as MTP-capable get `:mtp` route IDs,
+`[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
+`spec-draft-type-k/v = f16`, `spec-draft-n-max = 5`, and
+`spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
+preset sections, so generated ROCmFP4 presets omit that direct-command
+`-cpent` setting. The generator emits display aliases for each known
+compatible ROCmFP4 model using model name and size, bracketed
+capabilities/quantization/route tags, and the model author in parentheses,
+for example `Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
+`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`.
+`--with-vision` adds `mmproj` plus
 `image-min-tokens = 1024` for paired Plunderstruck projectors. Qwopus3.6 Coder
 keeps the same runtime profile but adds the model-card thinking-off kwargs
 `{"enable_thinking": false, "preserve_thinking": true}` for agentic use.

@@ -222,32 +222,203 @@ is_nex_n2_mini_rocmfp4_model() {
   [[ "$rel" =~ [Nn]ex-[Nn]2-mini-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
 }
 
-rocmfp4_alias_base() {
+model_author() {
   local rel="$1"
+  local first second rest
+
+  IFS=/ read -r first second rest <<< "$rel"
+  if [[ -n "${first:-}" && -n "${second:-}" && -n "${rest:-}" ]]; then
+    printf '%s\n' "$first"
+    return 0
+  fi
+
+  printf '%s\n' local
+}
+
+is_uncensored_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Uu][Nn][Cc][Ee][Nn][Ss][Oo][Rr][Ee][Dd] ]] ||
+    [[ "$rel" =~ [AaOo][Bb][Ll][Ii][Tt][Ee][Rr][Aa][Tt][Ee][Dd] ]] ||
+    [[ "$rel" =~ (^|[-_/])[Oo][Bb][Ll][Ii][Tt][Ee][Rr][Aa][Tt][Ee][Dd]($|[-_/]) ]] ||
+    [[ "$rel" =~ (^|[-_/])[Uu][Nn][Cc]($|[-_/]) ]]
+}
+
+is_moe_model() {
+  local rel="$1"
+  [[ "$rel" =~ [Aa][0-9]+[Bb] ]] ||
+    [[ "$rel" =~ [Mm][Oo][Ee] ]] ||
+    [[ "$rel" =~ MXFP[0-9]+_MOE ]]
+}
+
+is_imatrix_model() {
+  local rel="$1"
+  [[ "$rel" =~ (^|[-_/])[Ii][Mm][Aa][Tt][Rr][Ii][Xx]($|[-_/]) ]]
+}
+
+rocmfp4_alias_quant() {
+  local rel="$1"
+  local stem
+
+  stem="$(filename_stem "$rel")"
+  if [[ "$stem" =~ (Q[0-9]+_[A-Za-z0-9_]+)_ROCMFP4 ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+
+  if [[ "$stem" =~ (UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?)(-to-[Rr][Oo][Cc][Mm][Ff][Pp]4|-mtp)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
+    return 0
+  fi
+
+  if [[ "$stem" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]; then
+    printf '%s\n' ROCmFP4
+  fi
+}
+
+rocmfp4_alias_model_name() {
+  local rel="$1"
+  local stem base_name_re
 
   case "$rel" in
     *Nex-N2-mini-ROCmFP4*|*nex-n2-mini-rocmfp4*)
-      printf '%s\n' nex-n2-mini
+      printf '%s\n' Nex-N2-mini
       ;;
     *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' chadrock-35b-ace-saber
+      printf '%s\n' Chadrock3.6-35B-A3B-ACE-SABER
       ;;
     *CHADROCK3.6-35B-UNCENSORED-MTP-STRIX-LEAN*|*chadrock3.6-35b-uncensored-mtp-strix-lean*)
-      printf '%s\n' chadrock-35b-uncensored
+      printf '%s\n' Chadrock3.6-35B
       ;;
     *qwopus3.6-27b-v2-chadrock-rocmfp4-mtp*|*Qwopus3.6-27B-v2-MTP-BF16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' qwopus-27b-v2-chadrock
+      printf '%s\n' Qwopus3.6-27B-v2-Chadrock
       ;;
     *Qwopus3.6-27B-v2-MTP-Q4_0_ROCMFP4*|*qwopus3.6-27b-v2-mtp-q4_0_rocmfp4*)
-      printf '%s\n' qwopus-27b-v2
+      printf '%s\n' Qwopus3.6-27B-v2
       ;;
     *Qwopus3.6-35B-A3B-v1-MTP-Q4_0_ROCMFP4*|*qwopus3.6-35b-a3b-v1-mtp-q4_0_rocmfp4*)
-      printf '%s\n' qwopus-35b-a3b-v1
+      printf '%s\n' Qwopus3.6-35B-A3B-v1
       ;;
     *)
-      filename_stem "$rel" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'
+      stem="$(filename_stem "$rel")"
+      base_name_re='(^|[-_/])((Qwen|Qwopus|Chadrock|Nex|DeepSeek|Llama|Mistral|Mixtral|Gemma|Phi)[A-Za-z0-9.]*[-_][0-9]+(\.[0-9]+)?[Bb]([-_][A-Za-z][0-9]+[Bb])?([-_][Vv][0-9]+)?)'
+      if [[ "$stem" =~ $base_name_re ]]; then
+        printf '%s\n' "${BASH_REMATCH[2]//_/-}"
+        return 0
+      fi
+      stem="$(printf '%s\n' "$stem" | sed -E \
+        -e 's/[-_][Gg][Gg][Uu][Ff]$//' \
+        -e 's/[-_]?[Ss][Tt][Rr][Ii][Xx][_-]?[Ll][Ee][Aa][Nn]$//' \
+        -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
+        -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
+        -e 's/[-_]?Q[0-9]+_[A-Za-z0-9_]+_[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
+        -e 's/(^|[-_])[Mm][Tt][Pp]($|[-_])/-/g' \
+        -e 's/(^|[-_])[Uu][Nn][Cc][Ee][Nn][Ss][Oo][Rr][Ee][Dd]($|[-_])/-/g' \
+        -e 's/(^|[-_])[Uu][Nn][Cc]($|[-_])/-/g' \
+        -e 's/-+/-/g; s/_+/-/g; s/^-+//; s/-+$//')"
+      printf '%s\n' "$stem"
       ;;
   esac
+}
+
+format_model_alias() {
+  local model_name="$1"
+  local author="$2"
+  local moe="$3"
+  local mtp="$4"
+  local uncensored="$5"
+  local quant="$6"
+  shift 6
+  local tags=("$@")
+  local alias="$model_name"
+  local tag
+
+  if (( moe )); then
+    alias+=" [MOE]"
+  fi
+  if (( mtp )); then
+    alias+=" [MTP]"
+  fi
+  if (( uncensored )); then
+    alias+=" [UNC]"
+  fi
+  if [[ -n "$quant" ]]; then
+    alias+=" [$quant]"
+  fi
+  for tag in "${tags[@]}"; do
+    if [[ -n "$tag" ]]; then
+      alias+=" [$tag]"
+    fi
+  done
+  alias+=" ($author)"
+  printf '%s\n' "$alias"
+}
+
+unique_alias() {
+  local alias="$1"
+  local rel="$2"
+  local candidate="$alias"
+  local prefix author_suffix stem n author_suffix_re
+
+  if [[ -z "${seen_aliases[$candidate]:-}" ]]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+
+  stem="$(filename_stem "$rel" | sed -E 's/[^A-Za-z0-9_]+/-/g; s/^-+//; s/-+$//')"
+  author_suffix_re='^(.*)( \([^)]+\))$'
+  if [[ "$alias" =~ $author_suffix_re ]]; then
+    prefix="${BASH_REMATCH[1]}"
+    author_suffix="${BASH_REMATCH[2]}"
+    candidate="$prefix [$stem]$author_suffix"
+  else
+    candidate="$alias [$stem]"
+  fi
+
+  n=2
+  while [[ -n "${seen_aliases[$candidate]:-}" ]]; do
+    if [[ "$alias" =~ $author_suffix_re ]]; then
+      candidate="$prefix [$stem $n]$author_suffix"
+    else
+      candidate="$alias [$stem $n]"
+    fi
+    n=$((n + 1))
+  done
+
+  printf '%s\n' "$candidate"
+}
+
+rocmfp4_alias() {
+  local rel="$1"
+  shift
+  local model_name author quant moe mtp uncensored extra_tags
+
+  model_name="$(rocmfp4_alias_model_name "$rel")"
+  author="$(model_author "$rel")"
+  quant="$(rocmfp4_alias_quant "$rel")"
+  moe=0
+  if is_moe_model "$rel"; then
+    moe=1
+  fi
+  mtp=0
+  if is_mtp_model "$rel"; then
+    mtp=1
+  fi
+  uncensored=0
+  if is_uncensored_model "$rel"; then
+    uncensored=1
+  fi
+  extra_tags=()
+  if is_imatrix_model "$rel"; then
+    extra_tags+=(imatrix)
+  fi
+
+  format_model_alias "$model_name" "$author" "$moe" "$mtp" "$uncensored" "$quant" "${extra_tags[@]}" "$@"
+}
+
+crown_halo_mtp_dynamic_alias() {
+  local rel="$1"
+  shift
+  format_model_alias "Qwen3.6-35B-A3B-Crown-Halo-Dynamic" "$(model_author "$rel")" 1 1 0 "" "$@"
 }
 
 emit_model_section() {
@@ -316,9 +487,16 @@ emit_crown_halo_mtp_dynamic_section() {
 emit_crown_halo_mtp_dynamic_variants() {
   local id="$1"
   local model_path="$2"
+  local rel="$3"
+  local reasoning_alias non_reasoning_alias
 
-  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on crown-dynamic-mtp-reasoning
-  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off crown-dynamic-mtp
+  reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel")" "$rel")"
+  seen_aliases[$reasoning_alias]=1
+  non_reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel" non-reasoning)" "$rel")"
+  seen_aliases[$non_reasoning_alias]=1
+
+  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on "$reasoning_alias"
+  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off "$non_reasoning_alias"
 }
 
 emit_nex_n2_mini_rocmfp4_section() {
@@ -350,6 +528,65 @@ emit_nex_n2_mini_rocmfp4_section() {
   printf 'min-p = 0.0\n'
   printf 'metrics = true\n'
   printf 'mmap = off\n'
+}
+
+emit_rocmfp4_section() {
+  local id="$1"
+  local model_path="$2"
+  local mmproj_path="$3"
+  local reasoning="$4"
+  local alias="$5"
+  local thinking="$6"
+
+  emit_model_section "$id" "$model_path" "$mmproj_path" 0
+  printf 'alias = %s\n' "$alias"
+  printf 'ctx-size = 262144\n'
+  printf 'reasoning = %s\n' "$reasoning"
+  if [[ "$thinking" == "off" ]]; then
+    printf 'reasoning-format = deepseek\n'
+    printf 'chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}\n'
+  elif [[ "$reasoning" == "off" ]]; then
+    printf 'reasoning-format = none\n'
+    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  else
+    printf 'reasoning-format = deepseek\n'
+    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
+  fi
+  printf 'parallel = 1\n'
+  printf 'jinja = true\n'
+  printf 'n-gpu-layers = 999\n'
+  printf 'flash-attn = on\n'
+  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'batch-size = 2048\n'
+  printf 'ubatch-size = 256\n'
+  printf 'threads = 16\n'
+  printf 'threads-batch = 16\n'
+  printf 'cache-type-k = f16\n'
+  printf 'cache-type-v = f16\n'
+  printf 'ctx-checkpoints = 32\n'
+  printf 'cache-reuse = 256\n'
+  printf 'cache-ram = 65536\n'
+  printf 'temp = 0.6\n'
+  printf 'top-p = 0.95\n'
+  printf 'top-k = 20\n'
+  printf 'min-p = 0.0\n'
+  printf 'metrics = true\n'
+  printf 'mmap = off\n'
+  if [[ -n "$mmproj_path" ]]; then
+    printf 'image-min-tokens = 1024\n'
+  fi
+}
+
+emit_rocmfp4_variants() {
+  local id="$1"
+  local model_path="$2"
+  local reasoning_alias="$3"
+  local non_reasoning_alias="$4"
+  local mmproj_path="$5"
+  local thinking="${6:-on}"
+
+  emit_rocmfp4_section "$id" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
+  emit_rocmfp4_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
 }
 
 emit_rocmfp4_mtp_section() {
@@ -411,12 +648,13 @@ emit_rocmfp4_mtp_section() {
 emit_rocmfp4_mtp_variants() {
   local id="$1"
   local model_path="$2"
-  local alias_base="$3"
-  local mmproj_path="$4"
-  local thinking="${5:-on}"
+  local reasoning_alias="$3"
+  local non_reasoning_alias="$4"
+  local mmproj_path="$5"
+  local thinking="${6:-on}"
 
-  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$alias_base" "$thinking"
-  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$alias_base-non-reasoning" "$thinking"
+  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
+  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
 }
 
 emit_non_reasoning_section() {
@@ -469,6 +707,7 @@ else
 fi
 
 declare -A seen_ids=()
+declare -A seen_aliases=()
 model_count=0
 
 while IFS= read -r host_file; do
@@ -501,15 +740,16 @@ while IFS= read -r host_file; do
   fi
 
   if is_crown_halo_mtp_dynamic_model "$rel"; then
-    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" >> "$tmp_output"
+    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" "$rel" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
   fi
 
   if is_rocmfp4_llamacpp_model "$rel"; then
-    alias_base="$(rocmfp4_alias_base "$rel")"
     if is_nex_n2_mini_rocmfp4_model "$rel"; then
-      emit_nex_n2_mini_rocmfp4_section "$id" "$model_path" "$alias_base" >> "$tmp_output"
+      alias="$(unique_alias "$(rocmfp4_alias "$rel")" "$rel")"
+      seen_aliases[$alias]=1
+      emit_nex_n2_mini_rocmfp4_section "$id" "$model_path" "$alias" >> "$tmp_output"
       model_count=$((model_count + 1))
       continue
     fi
@@ -518,11 +758,27 @@ while IFS= read -r host_file; do
     if is_qwopus_27b_coder_rocmfp4_model "$rel"; then
       thinking=off
     fi
-    emit_rocmfp4_mtp_variants "$id" "$model_path" "$alias_base" "" "$thinking" >> "$tmp_output"
+    reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel")" "$rel")"
+    seen_aliases[$reasoning_alias]=1
+    non_reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel" non-reasoning)" "$rel")"
+    seen_aliases[$non_reasoning_alias]=1
+    if is_mtp_model "$rel"; then
+      emit_rocmfp4_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
+    else
+      emit_rocmfp4_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
+    fi
     if (( WITH_VISION )); then
       mmproj_path="$(find_mmproj "$host_file" "$rel")"
       if [[ -n "$mmproj_path" ]]; then
-        emit_rocmfp4_mtp_variants "$id:vision" "$model_path" "$alias_base-vision" "$mmproj_path" "$thinking" >> "$tmp_output"
+        vision_alias="$(unique_alias "$(rocmfp4_alias "$rel" vision)" "$rel")"
+        seen_aliases[$vision_alias]=1
+        vision_non_reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel" vision non-reasoning)" "$rel")"
+        seen_aliases[$vision_non_reasoning_alias]=1
+        if is_mtp_model "$rel"; then
+          emit_rocmfp4_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+        else
+          emit_rocmfp4_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+        fi
       fi
     fi
     model_count=$((model_count + 1))

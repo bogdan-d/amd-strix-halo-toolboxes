@@ -146,28 +146,32 @@ For those backends, `bin/run.sh` automatically generates an FP4-only preset.
 For the ROCm RFP4 backends it also sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus
 `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`. Normal generated presets skip ROCmFP4
 GGUFs so stock images do not expose routes that cannot load. The ROCmFP4
-profile emits exactly two single-slot MTP routes per compatible model: one
-alias with reasoning enabled and one `-non-reasoning` alias with reasoning
-disabled. Known aliases include `chadrock-35b-ace-saber`,
-`chadrock-35b-uncensored`, `qwopus-27b-v2-chadrock`, `qwopus-27b-v2`, and
-`qwopus-35b-a3b-v1`.
+profile emits reasoning-enabled and non-reasoning routes per compatible model.
+Only models identified as MTP-capable get `:mtp` route IDs, `[MTP]` aliases,
+and `draft-mtp` flags. Generated aliases follow the normal display-name
+pattern: model name and size first, bracketed capabilities/quantization next,
+and the model author last, for example
+`Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
+`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`. Non-reasoning and
+vision routes add their route tags before the author.
 Both routes keep the author profile in the model section:
 262144 context, backend-specific device selection (`Vulkan0` for
 `vulkan-rfp4`, `ROCm0` for ROCm RFP4), `b2048/u256`, f16 main and draft KV,
 `draft-mtp` depth 5, 32 context checkpoints, `cache-reuse = 256`,
 `cache-ram = 65536`, DeepSeek reasoning format for the reasoning-on route,
-metrics, and `mmap` off. The fork rejects `checkpoint-min-step` inside model
+metrics, and `mmap` off. MTP-capable ROCmFP4 routes also add `draft-mtp`
+depth 5 with f16 draft KV. The fork rejects `checkpoint-min-step` inside model
 preset sections, so generated ROCmFP4 sections omit it even though the model
 cards show `-cpent 256` in direct command examples. The Plunderstruck ROCmFP4
 models share this profile; when `--with-vision` is used and a same-directory
-`mmproj-F32.gguf` exists, the generated `:vision:mtp` routes add `mmproj` and
+`mmproj-F32.gguf` exists, the generated vision routes add `mmproj` and
 `image-min-tokens = 1024`. `Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` keeps those
 runtime flags but follows its model card's agentic-use guidance by adding
 `chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}`
 with DeepSeek reasoning formatting.
 `Nex-N2-mini-ROCmFP4-GGUF` is not an MTP model. Its generated route uses the
 same Strix runtime/cache profile, but `ctx-size = 131072`, no `spec-*` flags,
-and the author-facing `nex-n2-mini` alias.
+and the same generated display-alias pattern.
 
 `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
 MTP profile. The generator always emits exactly two routes for it, regardless
@@ -175,9 +179,10 @@ of `--with-non-reasoning`: `:mtp` with reasoning enabled and
 `:mtp:non-reasoning` with reasoning disabled. Both routes keep the model-card
 profile in the model section itself: 131072 context, row split, `f16/f16` main
 and draft KV, `draft-mtp` depth 4, single-slot serving, Strix polling, and
-`b2048/u512`. The reasoning-off route uses the author-facing
-`crown-dynamic-mtp` alias; the reasoning-on route uses
-`crown-dynamic-mtp-reasoning` so the router can load both presets.
+`b2048/u512`. The routes use generated display aliases, for example
+`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)` and
+`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] [non-reasoning] (jcbtc)`,
+so the router can load both presets without alias collisions.
 
 Generated presets are text-only by default, even when a same-directory
 `mmproj*.gguf` file exists. Pass `--with-vision` before the backend to add

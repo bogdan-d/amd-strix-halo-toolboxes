@@ -261,6 +261,10 @@ function effectiveMaxOutputTokens(
 }
 
 function displayNameForModel(id: string): string {
+  if (/\[[^\]]+\].*\([^)]+\)$/.test(id)) {
+    return id;
+  }
+
   const [pathPart, ...suffixes] = id.split(":");
   const pathParts = pathPart.split("/");
   const author = pathParts.length > 1 ? pathParts[0] : undefined;
@@ -287,7 +291,7 @@ function displayNameForModel(id: string): string {
   if (featureSuffixes.includes("mtp")) {
     tags.add("MTP");
   }
-  if (/huihui|abliterated|uncensored/i.test(id)) {
+  if (/huihui|[ao]bliterated|uncensored/i.test(id)) {
     tags.add("UNC");
   }
   if (quant !== undefined) {
