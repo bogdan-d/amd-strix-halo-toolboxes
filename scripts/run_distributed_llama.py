@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import os
+import json
 import shutil
 import tempfile
 import subprocess
@@ -10,13 +11,14 @@ from pathlib import Path
 
 # --- Configuration & Defaults ---
 SCRIPT_DIR = Path(__file__).parent.resolve()
-DEFAULT_TOOLBOX = "rocm7-nightlies"
+DEFAULT_MODELS_DIR = Path.home() / "models"
+CONFIG_FILE = Path.home() / ".config" / "strix-halo-distributed-llama.json"
+DEFAULT_TOOLBOX = "rocm-7.2.4"
 TOOLBOX_IMAGES = {
-    "rocm6_4_4": "llama-rocm-6.4.4",
-
-    "rocm7-nightlies": "llama-rocm7-nightlies",
-    "vulkan_amdvlk": "llama-vulkan-amdvlk",
-    "vulkan_radv": "llama-vulkan-radv",
+    "rocm-6.4.4": "llama-rocm-6.4.4",
+    "rocm-7.2.4": "llama-rocm-7.2.4",
+    "vulkan-amdvlk": "llama-vulkan-amdvlk",
+    "vulkan-radv": "llama-vulkan-radv",
 }
 
 MODES = ["llama-server", "llama-cli", "llama-bench"]
@@ -143,13 +145,91 @@ class AppState:
         # List of [ip, enabled]
         self.hosts = [list(h) for h in DEFAULT_HOSTS]
         self.context_size = None # None means default (do not pass -c)
+        self.kv_cache_quant = None  # None = off, "q8_0" or "q4_0"
+        self.extra_args = "--jinja"  # Extra CLI arguments passed to the executable
+        self.load_config()
 
     @property
     def active_hosts(self):
         return [h[0] for h in self.hosts if h[1]]
 
+    def save_config(self):
+        """Persist current settings to disk."""
+        data = {
+            "model_path": self.model_path,
+            "toolbox": self.toolbox,
+            "mode": self.mode,
+            "hosts": self.hosts,
+            "context_size": self.context_size,
+            "kv_cache_quant": self.kv_cache_quant,
+            "extra_args": self.extra_args,
+        }
+        try:
+            CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CONFIG_FILE.write_text(json.dumps(data, indent=2))
+        except OSError:
+            pass  # Non-fatal: silently skip if we can't write
+
+    def load_config(self):
+        """Load settings from disk, falling back to defaults for any bad values."""
+        if not CONFIG_FILE.is_file():
+            return
+        try:
+            data = json.loads(CONFIG_FILE.read_text())
+        except (json.JSONDecodeError, OSError):
+            return  # Corrupt or unreadable — keep defaults
+
+        if not isinstance(data, dict):
+            return
+
+        # Model path: only restore if the file still exists
+        mp = data.get("model_path", "")
+        if isinstance(mp, str) and mp and os.path.isfile(mp):
+            self.model_path = mp
+
+        # Toolbox: only restore if it's still a known backend
+        tb = data.get("toolbox")
+        if isinstance(tb, str) and tb in TOOLBOX_IMAGES:
+            self.toolbox = tb
+
+        # Mode
+        md = data.get("mode")
+        if isinstance(md, str) and md in MODES:
+            self.mode = md
+
+        # Hosts: list of [ip_str, enabled_bool]
+        hs = data.get("hosts")
+        if isinstance(hs, list) and hs:
+            valid = []
+            for entry in hs:
+                if (isinstance(entry, list) and len(entry) == 2
+                        and isinstance(entry[0], str) and isinstance(entry[1], bool)):
+                    valid.append(entry)
+            if valid:
+                self.hosts = valid
+
+        # Context size
+        cs = data.get("context_size")
+        if cs is None or (isinstance(cs, int) and cs > 0):
+            self.context_size = cs
+
+        # KV cache quantization
+        kv = data.get("kv_cache_quant")
+        if kv is None or (isinstance(kv, str) and kv in KV_CACHE_QUANT_VALUES):
+            self.kv_cache_quant = kv
+
+        # Extra args
+        ea = data.get("extra_args")
+        if isinstance(ea, str):
+            self.extra_args = ea
+
 def select_model(state):
-    start_path = state.model_path if state.model_path else os.getcwd()
+    if state.model_path:
+        start_path = state.model_path
+    elif DEFAULT_MODELS_DIR.is_dir():
+        start_path = str(DEFAULT_MODELS_DIR)
+    else:
+        start_path = os.getcwd()
     if os.path.isfile(start_path):
         start_path = os.path.dirname(start_path)
         
@@ -196,6 +276,48 @@ def select_context(state):
             state.context_size = int(val)
         else:
             state.context_size = None
+
+KV_CACHE_QUANT_VALUES = ("q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl")
+KV_CACHE_OPTIONS = {
+    "off": "Disabled (full precision)",
+    "q8_0": "Q8_0 (recommended)",
+    "q5_1": "Q5_1",
+    "q5_0": "Q5_0",
+    "q4_1": "Q4_1",
+    "q4_0": "Q4_0 (aggressive)",
+    "iq4_nl": "IQ4_NL",
+}
+
+def select_kv_cache(state):
+    menu_items = []
+    for key, desc in KV_CACHE_OPTIONS.items():
+        menu_items.extend([key, desc])
+
+    selection, code = run_dialog([
+        "--title", "KV Cache Quantization",
+        "--menu",
+        "Quantize the KV cache to reduce memory usage.\n"
+        "This adds --cache-type-k and --cache-type-v flags.",
+        "14", "55", "5",
+        *menu_items
+    ])
+    if code == 0 and selection:
+        state.kv_cache_quant = None if selection == "off" else selection
+
+def edit_extra_args(state):
+    current = state.extra_args
+    selection, code = run_dialog([
+        "--title", "Extra Arguments",
+        "--inputbox",
+        "Enter extra CLI arguments for the executable.\n"
+        "These are appended to the command as-is.\n"
+        "Example: --threads 8 -ngl 99\n"
+        "Leave empty for none:",
+        "13", "65",
+        current
+    ])
+    if code == 0:
+        state.extra_args = selection.strip()
 
 def add_server(state):
     selection, code = run_dialog([
@@ -333,6 +455,8 @@ def run_distributed(state):
     print(f"Toolbox: {state.toolbox} ({image})")
     print(f"Mode:    {state.mode}")
     print(f"Context: {state.context_size if state.context_size else 'Default'}")
+    print(f"KV Cache:{' ' + state.kv_cache_quant if state.kv_cache_quant else ' Off'}")
+    print(f"Extra:   {state.extra_args if state.extra_args else '(none)'}")
     print(f"Hosts:   {active_ips}")
     print("--------------------------------")
 
@@ -470,6 +594,12 @@ def run_distributed(state):
              extra_args = []
 
         local_cmd = base_args + extra_args
+        if state.kv_cache_quant:
+            local_cmd += ["--cache-type-k", state.kv_cache_quant,
+                          "--cache-type-v", state.kv_cache_quant]
+        if state.extra_args:
+            import shlex
+            local_cmd += shlex.split(state.extra_args)
         
         print(f"CMD: {' '.join(local_cmd)}")
         
@@ -491,18 +621,22 @@ def main_menu():
         model_display = Path(state.model_path).name if state.model_path else "(None)"
         servers_display = f"{len(state.active_hosts)} Active"
         context_display = str(state.context_size) if state.context_size else "Default"
+        kv_display = state.kv_cache_quant if state.kv_cache_quant else "Off"
+        extra_display = state.extra_args if state.extra_args else "(none)"
         
         menu = [
             "--clear", "--backtitle", "AMD Strix Halo - Distributed Llama",
             "--title", "Main Menu",
-            "--menu", "Select an option to configure or run:", "20", "60", "7",
-            "1", f"Model:   {model_display}",
-            "2", f"Toolbox: {state.toolbox}",
-            "3", f"Servers: {servers_display}",
-            "4", f"Mode:    {state.mode}",
-            "5", f"Context: {context_display}",
-            "6", "RUN DISTRIBUTED SERVER",
-            "7", "Exit"
+            "--menu", "Select an option to configure or run:", "22", "65", "9",
+            "1", f"Model:    {model_display}",
+            "2", f"Toolbox:  {state.toolbox}",
+            "3", f"Servers:  {servers_display}",
+            "4", f"Mode:     {state.mode}",
+            "5", f"Context:  {context_display}",
+            "6", f"KV Cache: {kv_display}",
+            "7", f"Extra:    {extra_display}",
+            "8", "RUN DISTRIBUTED SERVER",
+            "9", "Exit"
         ]
         
         choice, code = run_dialog(menu)
@@ -521,10 +655,18 @@ def main_menu():
         elif choice == "5":
             select_context(state)
         elif choice == "6":
-            run_distributed(state)
+            select_kv_cache(state)
         elif choice == "7":
+            edit_extra_args(state)
+        elif choice == "8":
+            run_distributed(state)
+        elif choice == "9":
             break
 
+        # Persist after every action
+        state.save_config()
+
+    state.save_config()
     subprocess.run(["clear"])
     exit(0)
 
