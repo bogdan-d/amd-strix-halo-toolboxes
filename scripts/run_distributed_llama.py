@@ -145,8 +145,11 @@ class AppState:
         # List of [ip, enabled]
         self.hosts = [list(h) for h in DEFAULT_HOSTS]
         self.context_size = None # None means default (do not pass -c)
+        self.bench_prefill = "512,8192,16384,32768,65536" # Default bench prefill curve
+        self.bench_gen = "128" # Default generation lengths
         self.kv_cache_quant = None  # None = off, "q8_0" or "q4_0"
         self.extra_args = "--jinja"  # Extra CLI arguments passed to the executable
+        self.bench_extra_args = ""
         self.load_config()
 
     @property
@@ -161,8 +164,11 @@ class AppState:
             "mode": self.mode,
             "hosts": self.hosts,
             "context_size": self.context_size,
+            "bench_prefill": self.bench_prefill,
+            "bench_gen": self.bench_gen,
             "kv_cache_quant": self.kv_cache_quant,
             "extra_args": self.extra_args,
+            "bench_extra_args": self.bench_extra_args,
         }
         try:
             CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -218,10 +224,27 @@ class AppState:
         if kv is None or (isinstance(kv, str) and kv in KV_CACHE_QUANT_VALUES):
             self.kv_cache_quant = kv
 
+        # Bench prefill
+        bp = data.get("bench_prefill")
+        if bp is not None:
+            self.bench_prefill = str(bp)
+
+        bg = data.get("bench_gen")
+        if bg is not None:
+            self.bench_gen = str(bg)
+
         # Extra args
         ea = data.get("extra_args")
         if isinstance(ea, str):
             self.extra_args = ea
+        elif isinstance(ea, dict):
+            self.extra_args = ea.get("llama-server", "")
+            
+        bea = data.get("bench_extra_args")
+        if isinstance(bea, str):
+            self.bench_extra_args = bea
+        elif isinstance(ea, dict):
+            self.bench_extra_args = ea.get("llama-bench", "")
 
 def select_model(state):
     if state.model_path:
@@ -264,18 +287,39 @@ def select_mode(state):
         state.mode = selection
 
 def select_context(state):
-    current = str(state.context_size) if state.context_size else ""
-    selection, code = run_dialog([
-        "--title", "Context Size",
-        "--inputbox", "Enter context size (e.g. 4096, 8192).\nLeave empty for model default:", "10", "60",
-        current
-    ])
-    if code == 0:
-        val = selection.strip()
-        if val.isdigit():
-            state.context_size = int(val)
-        else:
-            state.context_size = None
+    if state.mode == "llama-bench":
+        current_p = str(state.bench_prefill) if state.bench_prefill else ""
+        selection_p, code_p = run_dialog([
+            "--title", "Bench Prefill Sizes",
+            "--inputbox", "Enter prefill sizes (-p) separated by comma (e.g. 512,8192,16384).\nLeave empty to skip:", "10", "65",
+            current_p
+        ])
+        if code_p == 0:
+            val_p = selection_p.strip()
+            state.bench_prefill = val_p if val_p else None
+            
+            current_n = str(state.bench_gen) if state.bench_gen else ""
+            selection_n, code_n = run_dialog([
+                "--title", "Bench Generation Sizes",
+                "--inputbox", "Enter token generation lengths (-n) separated by comma (e.g. 128,512).\nLeave empty to skip:", "10", "65",
+                current_n
+            ])
+            if code_n == 0:
+                val_n = selection_n.strip()
+                state.bench_gen = val_n if val_n else None
+    else:
+        current = str(state.context_size) if state.context_size else ""
+        selection, code = run_dialog([
+            "--title", "Context Size",
+            "--inputbox", "Enter context size (e.g. 4096, 8192).\nLeave empty for model default:", "10", "60",
+            current
+        ])
+        if code == 0:
+            val = selection.strip()
+            if val.isdigit():
+                state.context_size = int(val)
+            else:
+                state.context_size = None
 
 KV_CACHE_QUANT_VALUES = ("q8_0", "q5_1", "q5_0", "q4_1", "q4_0", "iq4_nl")
 KV_CACHE_OPTIONS = {
@@ -305,11 +349,17 @@ def select_kv_cache(state):
         state.kv_cache_quant = None if selection == "off" else selection
 
 def edit_extra_args(state):
-    current = state.extra_args
+    if state.mode == "llama-bench":
+        current = state.bench_extra_args
+        title_suffix = "(Bench)"
+    else:
+        current = state.extra_args
+        title_suffix = "(Server/CLI)"
+        
     selection, code = run_dialog([
-        "--title", "Extra Arguments",
+        "--title", f"Extra Arguments {title_suffix}",
         "--inputbox",
-        "Enter extra CLI arguments for the executable.\n"
+        f"Enter extra CLI arguments for {state.mode}.\n"
         "These are appended to the command as-is.\n"
         "Example: --threads 8 -ngl 99\n"
         "Leave empty for none:",
@@ -317,7 +367,10 @@ def edit_extra_args(state):
         current
     ])
     if code == 0:
-        state.extra_args = selection.strip()
+        if state.mode == "llama-bench":
+            state.bench_extra_args = selection.strip()
+        else:
+            state.extra_args = selection.strip()
 
 def add_server(state):
     selection, code = run_dialog([
@@ -454,9 +507,18 @@ def run_distributed(state):
     print(f"Model:   {state.model_path}")
     print(f"Toolbox: {state.toolbox} ({image})")
     print(f"Mode:    {state.mode}")
-    print(f"Context: {state.context_size if state.context_size else 'Default'}")
+    
+    if state.mode == "llama-bench":
+        p_val = state.bench_prefill if state.bench_prefill else "skip"
+        n_val = state.bench_gen if state.bench_gen else "skip"
+        context_val = f"P: {p_val} | N: {n_val}"
+    else:
+        context_val = state.context_size
+    print(f"Context/Prefill: {context_val if context_val else 'Default'}")
     print(f"KV Cache:{' ' + state.kv_cache_quant if state.kv_cache_quant else ' Off'}")
-    print(f"Extra:   {state.extra_args if state.extra_args else '(none)'}")
+    
+    current_extra_args = state.bench_extra_args if state.mode == "llama-bench" else state.extra_args
+    print(f"Extra:   {current_extra_args if current_extra_args else '(none)'}")
     print(f"Hosts:   {active_ips}")
     print("--------------------------------")
 
@@ -583,13 +645,14 @@ def run_distributed(state):
 
         elif state.mode == "llama-bench":
              # Llama Bench specific
-             # User requested -mmp 0 and -fa 1 (Note: llama-bench uses different arg names sometimes?)
-             # llama-bench: -mmp (mmap)
              extra_args = [
                  "-mmp", "0",
                  "-fa", "1"
              ]
-             # bench usually controls context via other flags, user didn't ask for it here.
+             if state.bench_prefill:
+                 extra_args.extend(["-p", str(state.bench_prefill)])
+             if state.bench_gen:
+                 extra_args.extend(["-n", str(state.bench_gen)])
         else:
              extra_args = []
 
@@ -597,9 +660,11 @@ def run_distributed(state):
         if state.kv_cache_quant:
             local_cmd += ["--cache-type-k", state.kv_cache_quant,
                           "--cache-type-v", state.kv_cache_quant]
-        if state.extra_args:
+                          
+        current_extra_args = state.bench_extra_args if state.mode == "llama-bench" else state.extra_args
+        if current_extra_args:
             import shlex
-            local_cmd += shlex.split(state.extra_args)
+            local_cmd += shlex.split(current_extra_args)
         
         print(f"CMD: {' '.join(local_cmd)}")
         
@@ -620,9 +685,25 @@ def main_menu():
     while True:
         model_display = Path(state.model_path).name if state.model_path else "(None)"
         servers_display = f"{len(state.active_hosts)} Active"
-        context_display = str(state.context_size) if state.context_size else "Default"
+        
+        if state.mode == "llama-bench":
+            p_val = str(state.bench_prefill) if state.bench_prefill else "-"
+            n_val = str(state.bench_gen) if state.bench_gen else "-"
+            disp = f"{p_val} / {n_val}"
+            if len(disp) > 30:
+                disp = disp[:27] + "..."
+            context_display = disp
+            context_label = "Pref/Gen: "
+            run_label = "RUN BENCHMARK"
+        else:
+            context_display = str(state.context_size) if state.context_size else "Default"
+            context_label = "Context:  "
+            run_label = "RUN DISTRIBUTED SERVER"
+            
         kv_display = state.kv_cache_quant if state.kv_cache_quant else "Off"
-        extra_display = state.extra_args if state.extra_args else "(none)"
+        
+        current_extra_args = state.bench_extra_args if state.mode == "llama-bench" else state.extra_args
+        extra_display = current_extra_args if current_extra_args else "(none)"
         
         menu = [
             "--clear", "--backtitle", "AMD Strix Halo - Distributed Llama",
@@ -632,10 +713,10 @@ def main_menu():
             "2", f"Toolbox:  {state.toolbox}",
             "3", f"Servers:  {servers_display}",
             "4", f"Mode:     {state.mode}",
-            "5", f"Context:  {context_display}",
+            "5", f"{context_label}{context_display}",
             "6", f"KV Cache: {kv_display}",
             "7", f"Extra:    {extra_display}",
-            "8", "RUN DISTRIBUTED SERVER",
+            "8", run_label,
             "9", "Exit"
         ]
         
