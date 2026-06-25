@@ -290,18 +290,22 @@ def select_context(state):
     if state.mode == "llama-bench":
         current_p = str(state.bench_prefill) if state.bench_prefill else ""
         selection_p, code_p = run_dialog([
-            "--title", "Bench Prefill Sizes",
-            "--inputbox", "Enter prefill sizes (-p) separated by comma (e.g. 512,8192,16384).\nLeave empty to skip:", "10", "65",
+            "--title", "Bench Prefill Sizes (pp)",
+            "--inputbox", "Enter prompt processing sizes separated by comma (e.g. 512,8192,16384).\n"
+            "Each value creates a separate -pp test.\n"
+            "Leave empty to skip:", "12", "68",
             current_p
         ])
         if code_p == 0:
             val_p = selection_p.strip()
             state.bench_prefill = val_p if val_p else None
-            
+
             current_n = str(state.bench_gen) if state.bench_gen else ""
             selection_n, code_n = run_dialog([
-                "--title", "Bench Generation Sizes",
-                "--inputbox", "Enter token generation lengths (-n) separated by comma (e.g. 128,512).\nLeave empty to skip:", "10", "65",
+                "--title", "Bench Token Generation (tg)",
+                "--inputbox", "Enter token generation lengths separated by comma (e.g. 128).\n"
+                "Each value creates a separate -tg test.\n"
+                "Leave empty to skip:", "12", "68",
                 current_n
             ])
             if code_n == 0:
@@ -511,7 +515,7 @@ def run_distributed(state):
     if state.mode == "llama-bench":
         p_val = state.bench_prefill if state.bench_prefill else "skip"
         n_val = state.bench_gen if state.bench_gen else "skip"
-        context_val = f"P: {p_val} | N: {n_val}"
+        context_val = f"pg pairs: P=[{p_val}], N={n_val}"
     else:
         context_val = state.context_size
     print(f"Context/Prefill: {context_val if context_val else 'Default'}")
@@ -644,15 +648,15 @@ def run_distributed(state):
                  extra_args.extend(["-c", str(state.context_size)])
 
         elif state.mode == "llama-bench":
-             # Llama Bench specific
+             # Llama Bench specific — separate pp and tg at each context length
              extra_args = [
                  "-mmp", "0",
                  "-fa", "1"
              ]
              if state.bench_prefill:
-                 extra_args.extend(["-p", str(state.bench_prefill)])
+                 extra_args.extend(["-p", str(state.bench_prefill).strip()])
              if state.bench_gen:
-                 extra_args.extend(["-n", str(state.bench_gen)])
+                 extra_args.extend(["-n", str(state.bench_gen).strip()])
         else:
              extra_args = []
 
@@ -689,11 +693,11 @@ def main_menu():
         if state.mode == "llama-bench":
             p_val = str(state.bench_prefill) if state.bench_prefill else "-"
             n_val = str(state.bench_gen) if state.bench_gen else "-"
-            disp = f"{p_val} / {n_val}"
+            disp = f"pg P=[{p_val}] N={n_val}"
             if len(disp) > 30:
                 disp = disp[:27] + "..."
             context_display = disp
-            context_label = "Pref/Gen: "
+            context_label = "Bench:    "
             run_label = "RUN BENCHMARK"
         else:
             context_display = str(state.context_size) if state.context_size else "Default"
