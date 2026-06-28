@@ -5,7 +5,7 @@ into the next-workflow images. It is based on the `llama*` tools observed in the
 locally built `rocm`, `rocm-next`, and `vulkan` images before narrowing the
 build targets.
 
-The current stock and ROCmFP4 next-workflow images build:
+The current stock and ROCmFPX next-workflow images build:
 
 - `llama-server`
 - `llama-cli`
@@ -29,7 +29,7 @@ The ROCmFPX images also build the maintainer fork's validation tools:
 | `llama-cli` | Terminal inference tool for one-shot prompts, chat, device listing, and quick model checks. | Kept. Used by `cli` and `list-devices`. |
 | `llama-bench` | Throughput/latency benchmark tool. | Kept. Used by `bench`. |
 | `llama-gguf-split` | Split or combine large GGUF model files. | Kept. Useful model-file utility. |
-| `llama-quantize` | Quantize model weights. | Kept. Needed for ROCmFPX/ROCmFP4 model prep in the fork images and useful in stock images. |
+| `llama-quantize` | Quantize model weights. | Kept. Needed for ROCmFPX model prep in the fork images and useful in stock images. |
 | `llama-mtmd-cli` | Standalone multimodal CLI for image/audio-capable models using the mtmd path. | Not built. Reconsider if testing multimodal outside `llama-server`. |
 | `llama-embedding` | Standalone embedding example/tool. | Not built. Reconsider for dedicated embedding tests outside server mode. |
 | `llama-tokenize` | Tokenization helper for inspecting prompt tokenization. | Not built. Reconsider when debugging templates or context usage. |

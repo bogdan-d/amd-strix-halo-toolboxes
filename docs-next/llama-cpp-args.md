@@ -44,8 +44,8 @@ These are the first knobs to decide for this repo.
 | `--no-mmap` | Use for server and CLI | Avoids memory fragmentation/page behavior that can crash large unified-memory runs. |
 | `-ngl`, `--n-gpu-layers` | Use `999`, `all`, or `auto` | Full iGPU offload is the normal target. Existing helpers use `999`. |
 | `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` total | 131k is the conservative Strix Halo baseline; with server slots, active presets treat 256k as the shared context/KV pool. |
-| `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096`; ROCmFP4: `512` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation; the custom ROCmFP4 profile follows its model card. |
-| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048`; ROCmFP4: `512` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan and the custom ROCmFP4 profile at their tested values. |
+| `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096`; ROCmFPX: `512` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation; the custom ROCmFPX profile follows its model-card-derived profile. |
+| `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048`; ROCmFPX: `512` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan and the custom ROCmFPX profile at its tested value. |
 | `-ctk`, `-ctv` | Active presets use `q8_0` | Q8 KV roughly halves KV memory versus `f16` with low observed quality impact; keep `f16` as the comparison baseline. |
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
@@ -59,13 +59,12 @@ The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model, with display aliases such as
 `Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)`.
 
-The generated ROCmFP4 routes are another exception and require a custom fork
-image, not stock llama.cpp. Use `vulkan-fp4` for Vulkan, `rocm-fp4` for
-stable ROCm, or `rocm-next-fp4` for ROCm nightlies. ROCmFPX GGUFs use the newer
-ROCmFPX fork images: `vulkan-fpx`, `rocm-fpx`, or `rocm-next-fpx`.
+The generated ROCmFPX routes are another exception and require a custom fork
+image, not stock llama.cpp. Use `vulkan-fpx`, `rocm-fpx`, or `rocm-next-fpx`.
+Existing ROCmFP4-named GGUF/config patterns are treated as ROCmFPX-compatible.
 They keep the author profile in the model sections: `ctx-size = 262144`,
-`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-fp4`,
-`ROCm0` for ROCm FP4/FPX), `batch-size = 2048`, `ubatch-size = 256`,
+`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-fpx`,
+`ROCm0` for ROCm FPX), `batch-size = 2048`, `ubatch-size = 256`,
 `threads = 16`, `threads-batch = 16`, `cache-type-k/v = f16`,
 `ctx-checkpoints = 32`, `cache-reuse = 256`, `cache-ram = 65536`,
 `reasoning-format = deepseek` for reasoning-on routes, metrics enabled, and
@@ -73,9 +72,9 @@ They keep the author profile in the model sections: `ctx-size = 262144`,
 `[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
 `spec-draft-type-k/v = f16`, `spec-draft-n-max = 5`, and
 `spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
-preset sections, so generated ROCmFP4/ROCmFPX presets omit that direct-command
+preset sections, so generated ROCmFPX presets omit that direct-command
 `-cpent` setting. The generator emits display aliases for each known
-compatible ROCmFP4/ROCmFPX model using model name and size, bracketed
+compatible ROCmFPX model using model name and size, bracketed
 capabilities/quantization/route tags, and the model author in parentheses,
 for example `Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
 `Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`.
@@ -87,7 +86,7 @@ Nex-N2-mini keeps the same non-speculative runtime profile with
 `ctx-size = 131072` and no MTP/draft flags.
 `bin/run.sh` sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` and `GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for
-the ROCm FP4 backends.
+the ROCm FPX backends.
 
 ## Mental Model
 
@@ -142,7 +141,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-n`, `--predict`, `--n-predict` | both | Max generated tokens. `-1` means unbounded. |
 | `-b`, `--batch-size` | both | Logical max batch. Affects prompt throughput and memory. |
 | `-ub`, `--ubatch-size` | both | Physical microbatch. Critical perf/memory knob. |
-| `GGML_HIP_MAX_BATCH_SIZE` | ROCm env | HIP backend batch cap. This repo sets it to `2048` for ROCm/ROCm-next/ROCmFP4 helper runs unless overridden. |
+| `GGML_HIP_MAX_BATCH_SIZE` | ROCm env | HIP backend batch cap. This repo sets it to `2048` for ROCm/ROCm-next/ROCmFPX helper runs unless overridden. |
 | `--keep` | both | Tokens kept when context shifts. |
 | `--swa-full` | both | Use full-size sliding-window-attention cache. |
 | `--perf`, `--no-perf` | both | Enable internal performance timings. |
@@ -150,7 +149,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. In server use, `ctx-size` is the total KV/context pool and is split across slots. |
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
 | `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Maximum context checkpoints per slot. Active Qwen3.6 presets use `32` to avoid repeated full prompt re-processing in 4-slot agent runs. |
-| `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Stock active presets set `256`; generated FP4/FPX fork presets omit it because the fork rejects it inside preset sections. |
+| `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Stock active presets set `256`; generated FPX fork presets omit it because the fork rejects it inside preset sections. |
 | `-cram`, `--cache-ram` | both | RAM limit for prompt/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
 
 The current Vulkan image was tested with `llama-server --help`: it accepts

@@ -13,19 +13,14 @@ The helper script supports the local next-workflow images:
 | `rocm-next` | `localhost/strix-llama:rocm-next` by default, or `:rocm-next-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `rocm7-nightlies` | `localhost/strix-llama:rocm7-nightlies` by default, or `:rocm7-nightlies-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `vulkan` | `localhost/strix-llama:vulkan` by default, or `:vulkan-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
-| `vulkan-fp4` | `localhost/strix-llama:vulkan-fp4` by default, or `:vulkan-fp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
-| `rocm-fp4` | `localhost/strix-llama:rocm-fp4` by default, or `:rocm-fp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
-| `rocm-next-fp4` | `localhost/strix-llama:rocm-next-fp4` by default, or `:rocm-next-fp4-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `vulkan-fpx` | `localhost/strix-llama:vulkan-fpx` by default, or `:vulkan-fpx-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri` |
 | `rocm-fpx` | `localhost/strix-llama:rocm-fpx` by default, or `:rocm-fpx-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 | `rocm-next-fpx` | `localhost/strix-llama:rocm-next-fpx` by default, or `:rocm-next-fpx-$CPU_TARGET` when `CPU_TARGET!=generic` | `/dev/dri`, `/dev/kfd` |
 
 `vulkan-radv` and `vulkan_radv` are aliases for `vulkan`. Explicit tags created
 by `bin/build.sh` also work directly, for example `rocm-strix-halo`,
-`rocm-7.2.4-strix-halo`, `rocm-next-native`, `vulkan-fp4-strix-halo`,
-`rocm-fp4-strix-halo`, `rocm-next-fp4-strix-halo`,
-`vulkan-fpx-strix-halo`, `rocm-fpx-strix-halo`,
-`rocm-next-fpx-strix-halo`, or `vulkan-native`.
+`rocm-7.2.4-strix-halo`, `rocm-next-native`, `vulkan-fpx-strix-halo`,
+`rocm-fpx-strix-halo`, `rocm-next-fpx-strix-halo`, or `vulkan-native`.
 
 ## Quick Start
 
@@ -47,8 +42,6 @@ For ROCm backends, a silent exit or exit status `139` means the process likely
 segfaulted before llama.cpp could print an error. Check the runtime first:
 
 ```bash
-bin/run.sh rocm-next-fp4 run rocminfo
-bin/run.sh rocm-next-fp4 list-devices
 bin/run.sh rocm-next-fpx run rocminfo
 bin/run.sh rocm-next-fpx list-devices
 ```
@@ -60,9 +53,6 @@ or `CPU_TARGET=native` can be run without spelling full tag each time:
 ```bash
 CPU_TARGET=strix-halo bin/run.sh rocm server
 CPU_TARGET=strix-halo bin/run.sh rocm-7.2.4 server
-CPU_TARGET=strix-halo bin/run.sh vulkan-fp4 server
-CPU_TARGET=strix-halo bin/run.sh rocm-fp4 server
-CPU_TARGET=strix-halo bin/run.sh rocm-next-fp4 server
 CPU_TARGET=strix-halo bin/run.sh vulkan-fpx server
 CPU_TARGET=strix-halo bin/run.sh rocm-fpx server
 CPU_TARGET=strix-halo bin/run.sh rocm-next-fpx server
@@ -70,9 +60,8 @@ CPU_TARGET=native bin/run.sh vulkan list-devices
 ```
 
 Those commands resolve to `:rocm-strix-halo`, `:rocm-7.2.4-strix-halo`, and
-`:vulkan-fp4-strix-halo`, `:rocm-fp4-strix-halo`,
-`:rocm-next-fp4-strix-halo`, `:vulkan-fpx-strix-halo`,
-`:rocm-fpx-strix-halo`, `:rocm-next-fpx-strix-halo`, and `:vulkan-native`. You can also pass exact
+`:vulkan-fpx-strix-halo`, `:rocm-fpx-strix-halo`,
+`:rocm-next-fpx-strix-halo`, and `:vulkan-native`. You can also pass exact
 build tag as backend argument if you want to bypass env-based resolution.
 
 List the configured model IDs:
@@ -135,25 +124,7 @@ speculation enabled:
 "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:mtp"
 ```
 
-ROCmFP4 GGUFs are not compatible with stock llama.cpp. Build and run them with
-the explicit `vulkan-fp4` backend for Vulkan, `rocm-fp4` for stable ROCm, or
-`rocm-next-fp4` for ROCm nightlies:
-
-```bash
-bin/build.sh vulkan-fp4
-bin/run.sh vulkan-fp4 models
-bin/run.sh vulkan-fp4 server
-
-bin/build.sh rocm-fp4
-bin/run.sh rocm-fp4 models
-bin/run.sh rocm-fp4 server
-
-bin/build.sh rocm-next-fp4
-bin/run.sh rocm-next-fp4 models
-bin/run.sh rocm-next-fp4 server
-```
-
-ROCmFPX GGUFs use the newer ROCmFPX fork and the same backend matrix:
+ROCmFPX-compatible GGUFs use the ROCmFPX fork backend matrix:
 
 ```bash
 bin/build.sh vulkan-fpx
@@ -166,10 +137,10 @@ bin/build.sh rocm-next-fpx
 bin/run.sh rocm-next-fpx list-devices
 ```
 
-For those backends, `bin/run.sh` automatically generates an FP4-only or
-FPX-only preset as appropriate. For the ROCm FP4/FPX backends it also sets
+For those backends, `bin/run.sh` automatically generates an FPX-only preset.
+For the ROCm FPX backends it also sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`.
-Normal generated presets skip ROCmFP4 and ROCmFPX GGUFs so stock images do not
+Normal generated presets skip ROCmFPX-compatible GGUFs so stock images do not
 expose routes that cannot load. The fork profile emits reasoning-enabled and
 non-reasoning routes per compatible model.
 Only models identified as MTP-capable get `:mtp` route IDs, `[MTP]` aliases,
@@ -180,25 +151,25 @@ and the model author last, for example
 `Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`, or
 `Qwopus3.6-27B [MTP] [Q6_0] (Jackrong)`. Non-reasoning and
 vision routes add their route tags before the author.
-Both FP4 and FPX routes keep the author profile in the model section:
+FPX routes keep the author profile in the model section:
 262144 context, backend-specific device selection (`Vulkan0` for Vulkan fork
 images, `ROCm0` for ROCm fork images), `b2048/u256`, f16 main and draft KV,
 `draft-mtp` depth 5, 32 context checkpoints, `cache-reuse = 256`,
 `cache-ram = 65536`, DeepSeek reasoning format for the reasoning-on route,
-metrics, and `mmap` off. MTP-capable ROCmFP4 routes also add `draft-mtp`
-depth 5 with f16 draft KV; ROCmFPX MTP routes use the same profile. The fork
-rejects `checkpoint-min-step` inside model preset sections, so generated
-ROCmFP4/ROCmFPX presets omit it even though some model cards show `-cpent 256`
-in direct command examples. The Plunderstruck ROCmFP4 models share this
-profile; when `--with-vision` is used and a same-directory
-`mmproj-F32.gguf` exists, the generated vision routes add `mmproj` and
-`image-min-tokens = 1024`. `Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` keeps those
-runtime flags but follows its model card's agentic-use guidance by adding
+metrics, and `mmap` off. MTP-capable routes add `draft-mtp` depth 5 with f16
+draft KV. The fork rejects `checkpoint-min-step` inside model preset sections,
+so generated ROCmFPX presets omit it even though some model cards show
+`-cpent 256` in direct command examples. Existing ROCmFP4-named model configs
+remain accepted by the ROCmFPX generator and use this same profile. When
+`--with-vision` is used and a same-directory `mmproj-F32.gguf` exists, the
+generated vision routes add `mmproj` and `image-min-tokens = 1024`.
+`Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` keeps those runtime flags but follows
+its model card's agentic-use guidance by adding
 `chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}`
 with DeepSeek reasoning formatting.
-`Nex-N2-mini-ROCmFP4-GGUF` is not an MTP model. Its generated route uses the
-same Strix runtime/cache profile, but `ctx-size = 131072`, no `spec-*` flags,
-and the same generated display-alias pattern.
+`Nex-N2-mini-ROCmFP4-GGUF` is not an MTP model. Its generated ROCmFPX route
+uses the same Strix runtime/cache profile, but `ctx-size = 131072`, no
+`spec-*` flags, and the same generated display-alias pattern.
 
 `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
 MTP profile. The generator always emits exactly two routes for it, regardless
@@ -284,17 +255,10 @@ bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs 
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models.ini
 ```
 
-For the ROCmFP4/ROCmFPX custom backends, use `--rocmfp4-only` or
-`--rocmfpx-only` directly, or let `bin/run.sh` add the right flag for the
-`*-fp4` and `*-fpx` backends:
+For the ROCmFPX custom backends, use `--rocmfpx-only` directly, or let
+`bin/run.sh` add it for the `*-fpx` backends:
 
 ```bash
-bin/generate-models-preset.sh --rocmfp4-only --with-configs \
-  "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfp4.ini
-
-bin/generate-models-preset.sh --rocmfp4-only --rocmfp4-device Vulkan0 \
-  "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfp4-vulkan.ini
-
 bin/generate-models-preset.sh --rocmfpx-only --rocmfpx-device ROCm0 \
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfpx.ini
 ```

@@ -15,11 +15,6 @@ Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
   rocm-next  ROCm nightly image resolved from CPU_TARGET
   vulkan     Vulkan RADV image resolved from CPU_TARGET
-  vulkan-fp4
-             Vulkan image with the custom ROCmFP4 llama.cpp fork
-  rocm-fp4  Stable ROCm image with the custom ROCmFP4 llama.cpp fork
-  rocm-next-fp4
-             ROCm nightly image with the custom ROCmFP4 llama.cpp fork
   rocm-fpx  Stable ROCm image with the custom ROCmFPX llama.cpp fork
   vulkan-fpx
              Vulkan image with the custom ROCmFPX llama.cpp fork
@@ -27,8 +22,7 @@ Backends:
              ROCm nightly image with the custom ROCmFPX llama.cpp fork
   Explicit build tags from bin/build.sh also work, for example:
              rocm-7.2.4, rocm-strix-halo, rocm-next-strix-halo,
-             vulkan-fp4-strix-halo, rocm-fp4-strix-halo,
-             rocm-next-fp4-strix-halo, rocm7-nightlies-native, vulkan-native,
+             rocm7-nightlies-native, vulkan-native,
              vulkan-fpx-strix-halo, rocm-fpx-strix-halo,
              rocm-next-fpx-strix-halo
 
@@ -59,9 +53,9 @@ Environment:
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
   LLAMA_BATCH           Default logical batch size. Vulkan: 2048, ROCm: 4096,
-                        ROCmFP4/ROCmFPX: 512
+                        ROCmFPX: 512
   LLAMA_UBATCH          Default physical batch size. Vulkan: 512, ROCm: 2048,
-                        ROCmFP4/ROCmFPX: 512
+                        ROCmFPX: 512
   GGML_HIP_MAX_BATCH_SIZE
                         ROCm HIP batch cap. Default for ROCm: 2048
   LLAMA_NGL             GPU layers to offload. Default: 999
@@ -184,18 +178,6 @@ rocm_next_alias_tag() {
   printf 'rocm7-nightlies%s' "$(cpu_target_suffix)"
 }
 
-vulkan_fp4_tag() {
-  printf 'vulkan-fp4%s' "$(cpu_target_suffix)"
-}
-
-rocm_fp4_tag() {
-  printf 'rocm-fp4%s' "$(cpu_target_suffix)"
-}
-
-rocm_next_fp4_tag() {
-  printf 'rocm-next-fp4%s' "$(cpu_target_suffix)"
-}
-
 rocm_fpx_tag() {
   printf 'rocm-fpx%s' "$(cpu_target_suffix)"
 }
@@ -215,6 +197,11 @@ vulkan_tag() {
 BACKEND_INPUT="${BACKEND//_/-}"
 
 case "$BACKEND_INPUT" in
+  vulkan-fp4|vulkan-fp4-*|rocm-fp4|rocm-fp4-*|rocm-next-fp4|rocm-next-fp4-*)
+    echo "Removed backend: $BACKEND" >&2
+    echo "Use vulkan-fpx, rocm-fpx, or rocm-next-fpx." >&2
+    exit 1
+    ;;
   vulkan|vulkan-radv)
     BACKEND_FAMILY="vulkan"
     IMAGE_TAG="$(vulkan_tag)"
@@ -227,20 +214,6 @@ case "$BACKEND_INPUT" in
     IMAGE_TAG="vulkan-${BACKEND_INPUT#vulkan-radv-}"
     DEVICE_ARGS=(--device /dev/dri)
     DEFAULT_BATCH=2048
-    DEFAULT_UBATCH=512
-    ;;
-  vulkan-fp4)
-    BACKEND_FAMILY="vulkan-fp4"
-    IMAGE_TAG="$(vulkan_fp4_tag)"
-    DEVICE_ARGS=(--device /dev/dri)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
-  vulkan-fp4-*)
-    BACKEND_FAMILY="vulkan-fp4"
-    IMAGE_TAG="$BACKEND_INPUT"
-    DEVICE_ARGS=(--device /dev/dri)
-    DEFAULT_BATCH=512
     DEFAULT_UBATCH=512
     ;;
   vulkan-fpx)
@@ -278,27 +251,6 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
-  rocm-fp4)
-    BACKEND_FAMILY="rocm-fp4"
-    IMAGE_TAG="$(rocm_fp4_tag)"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
-  rocm-next-fp4)
-    BACKEND_FAMILY="rocm-next-fp4"
-    IMAGE_TAG="$(rocm_next_fp4_tag)"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
-  rocm-next-fp4-*)
-    BACKEND_FAMILY="rocm-next-fp4"
-    IMAGE_TAG="$BACKEND_INPUT"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
   rocm-next-fpx)
     BACKEND_FAMILY="rocm-next-fpx"
     IMAGE_TAG="$(rocm_next_fpx_tag)"
@@ -334,13 +286,6 @@ case "$BACKEND_INPUT" in
     DEFAULT_BATCH=4096
     DEFAULT_UBATCH=2048
     ;;
-  rocm-fp4-*)
-    BACKEND_FAMILY="rocm-fp4"
-    IMAGE_TAG="$BACKEND_INPUT"
-    DEVICE_ARGS=(--device /dev/dri --device /dev/kfd)
-    DEFAULT_BATCH=512
-    DEFAULT_UBATCH=512
-    ;;
   rocm)
     BACKEND_FAMILY="rocm"
     IMAGE_TAG="$(stable_rocm_tag)"
@@ -371,14 +316,7 @@ esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
-if [[ "$BACKEND_FAMILY" == *-fp4 ]]; then
-  GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-only)
-  if [[ "$BACKEND_FAMILY" == vulkan-fp4 ]]; then
-    GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-device Vulkan0)
-  else
-    GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-device ROCm0)
-  fi
-elif [[ "$BACKEND_FAMILY" == *-fpx ]]; then
+if [[ "$BACKEND_FAMILY" == *-fpx ]]; then
   GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-only)
   if [[ "$BACKEND_FAMILY" == vulkan-fpx ]]; then
     GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device Vulkan0)
@@ -386,7 +324,7 @@ elif [[ "$BACKEND_FAMILY" == *-fpx ]]; then
     GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device ROCm0)
   fi
 fi
-if [[ "$BACKEND_FAMILY" == rocm*-fp4 || "$BACKEND_FAMILY" == rocm*-fpx ]]; then
+if [[ "$BACKEND_FAMILY" == rocm*-fpx ]]; then
   HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"
   GGML_HIP_ENABLE_UNIFIED_MEMORY="${GGML_HIP_ENABLE_UNIFIED_MEMORY:-1}"
 fi
@@ -435,7 +373,7 @@ for name in "${ENV_NAMES[@]}"; do
       continue
       ;;
     HSA_OVERRIDE_GFX_VERSION|GGML_HIP_ENABLE_UNIFIED_MEMORY)
-      if [[ "$BACKEND_FAMILY" == rocm*-fp4 || "$BACKEND_FAMILY" == rocm*-fpx ]]; then
+      if [[ "$BACKEND_FAMILY" == rocm*-fpx ]]; then
         continue
       fi
       ;;
@@ -451,7 +389,7 @@ if [[ "$BACKEND_FAMILY" == rocm* ]]; then
   GGML_HIP_MAX_BATCH_SIZE="${GGML_HIP_MAX_BATCH_SIZE:-2048}"
   ENV_ARGS+=(--env "GGML_HIP_MAX_BATCH_SIZE=$GGML_HIP_MAX_BATCH_SIZE")
 fi
-if [[ "$BACKEND_FAMILY" == rocm*-fp4 || "$BACKEND_FAMILY" == rocm*-fpx ]]; then
+if [[ "$BACKEND_FAMILY" == rocm*-fpx ]]; then
   ENV_ARGS+=(
     --env "HSA_OVERRIDE_GFX_VERSION=$HSA_OVERRIDE_GFX_VERSION"
     --env "GGML_HIP_ENABLE_UNIFIED_MEMORY=$GGML_HIP_ENABLE_UNIFIED_MEMORY"
@@ -831,7 +769,7 @@ case "$ACTION" in
     MODEL="$(container_model_path "$1")"
     shift
     LOAD_TEST_ARGS=()
-    if [[ "$BACKEND_FAMILY" != *-fp4 ]]; then
+    if [[ "$BACKEND_FAMILY" != *-fpx ]]; then
       LOAD_TEST_ARGS+=(--no-ui)
     fi
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)

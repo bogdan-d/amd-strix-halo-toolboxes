@@ -41,25 +41,19 @@ The local branch adds the next-workflow surface:
 
 ## Container Targets
 
-The next workflow currently supports nine build types across three Containerfiles:
+The next workflow currently supports six build types across two Containerfiles:
 
 | Build type | Default tag | Purpose |
 | :--- | :--- | :--- |
 | `rocm` | `localhost/strix-llama:rocm` | Stable ROCm, defaulting to ROCm 7.2.4. |
 | `rocm-next` | `localhost/strix-llama:rocm-next` | ROCm nightly tarball builds from TheRock for `gfx1151`. |
 | `vulkan` | `localhost/strix-llama:vulkan` | Fedora Mesa RADV Vulkan runtime. |
-| `vulkan-fp4` | `localhost/strix-llama:vulkan-fp4` | Explicit experimental Vulkan build of the custom ROCmFP4 llama.cpp fork. |
-| `rocm-fp4` | `localhost/strix-llama:rocm-fp4` | Explicit experimental stable ROCm build of the custom ROCmFP4 llama.cpp fork. |
-| `rocm-next-fp4` | `localhost/strix-llama:rocm-next-fp4` | Explicit experimental ROCm nightly build of the custom ROCmFP4 llama.cpp fork. |
 | `vulkan-fpx` | `localhost/strix-llama:vulkan-fpx` | Explicit experimental Vulkan build of the custom ROCmFPX llama.cpp fork. |
 | `rocm-fpx` | `localhost/strix-llama:rocm-fpx` | Explicit experimental stable ROCm build of the custom ROCmFPX llama.cpp fork. |
 | `rocm-next-fpx` | `localhost/strix-llama:rocm-next-fpx` | Explicit experimental ROCm nightly build of the custom ROCmFPX llama.cpp fork. |
 
 `containers/Containerfile` is the stock llama.cpp build path for `rocm`,
-`rocm-next`, and `vulkan`. `containers/Containerfile.rocmfp4` is the isolated
-ROCmFP4 fork build path for `vulkan-fp4`, `rocm-fp4`, and
-`rocm-next-fp4`, with a separate llama.cpp source cache.
-`containers/Containerfile.rocmfpx` is the isolated ROCmFPX fork build path for
+`rocm-next`, and `vulkan`. `containers/Containerfile.rocmfpx` is the isolated ROCmFPX fork build path for
 `vulkan-fpx`, `rocm-fpx`, and `rocm-next-fpx`, with its own source cache.
 
 The stock targets follow the same llama.cpp source line by default. The old ROCm-only
@@ -70,15 +64,13 @@ environment; current images avoid those exports and expose ROCm libraries
 through `ldconfig` instead. Use `LLAMA_REF` only for testing, bisects, or
 deliberately preserved test builds across stock backends. The default
 repository is `ggml-org/llama.cpp`, matching the current canonical upstream
-after the old `ggerganov` path began redirecting. The `*-fp4` targets are
-isolated because ROCmFP4 GGUFs require
-`charlie12345/rocmfp4-llama`; all FP4 targets default to branch
-`mtp-rocmfp4-strix` pinned at `4795079b04f5e0ada6e5d2e85b12bac1e27e7873`.
-The `*-fpx` targets use `charlie12345/ROCmFPX` branch `main` pinned at
+after the old `ggerganov` path began redirecting. The `*-fpx` targets use `charlie12345/ROCmFPX` branch `main` pinned at
 `014cd28b97d539a0365979d88e9846fad5aa822b`. Those images also build the
 fork's local validation tools (`llama-completion`, `llama-perplexity`,
 `test-backend-ops`, `test-quantize-fns`, and `test-quantize-perf`) because the
-ROCmFPX repo's smoke and regression scripts use them.
+ROCmFPX repo's smoke and regression scripts use them. The older
+`charlie12345/rocmfp4-llama` image path has been removed; ROCmFPX remains
+compatible with the existing ROCmFP4 model naming/config patterns.
 
 ## Build Workflow
 
@@ -88,15 +80,12 @@ also use Podman through `BUILDER=podman`.
 Important behavior added locally:
 
 - target aliases such as `rocm`, `rocm=7.2.4`, `rocm-next`,
-  `rocm7-nightlies`, `vulkan`, `vulkan-radv`, `vulkan-fp4`, `rocm-fp4`,
-  `rocm-next-fp4`, `vulkan-fpx`, `rocm-fpx`, and `rocm-next-fpx`;
+  `rocm7-nightlies`, `vulkan`, `vulkan-radv`, `vulkan-fpx`, `rocm-fpx`, and
+  `rocm-next-fpx`;
 - automatic Containerfile selection: stock targets use `containers/Containerfile`
-  ROCmFP4 targets use `containers/Containerfile.rocmfp4`, and ROCmFPX targets
-  use `containers/Containerfile.rocmfpx`;
+  and ROCmFPX targets use `containers/Containerfile.rocmfpx`;
 - `LLAMA_REF` to optionally pin llama.cpp across stock backends for tests,
   bisects, or preserved builds;
-- `ROCMFP4_LLAMA_REPO`, `ROCMFP4_LLAMA_BRANCH`, and `ROCMFP4_LLAMA_REF` for
-  the explicit FP4 fork targets;
 - `ROCMFPX_LLAMA_REPO`, `ROCMFPX_LLAMA_BRANCH`, and `ROCMFPX_LLAMA_REF` for
   the explicit FPX fork target;
 - `ROCMFPX_DECODE_TUNE` for opt-in Strix ROCmFPX decode launch tuning while
@@ -136,9 +125,9 @@ Important defaults:
   `reasoning = off` and non-thinking sampling defaults;
 - automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
   for paths or filenames containing `MTP` or `mtp`;
-- FP4-only and FPX-only generated presets for the `*-fp4` and `*-fpx`
-  backends, with normal generated presets excluding ROCmFP4/ROCmFPX GGUFs so
-  stock images do not route to incompatible models;
+- FPX-only generated presets for the `*-fpx` backends, with normal generated
+  presets excluding ROCmFPX-compatible GGUFs so stock images do not route to
+  incompatible models;
 - generated presets keep shared defaults in `[*]`; this can expose a broken
   `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;
@@ -148,10 +137,10 @@ Important defaults:
   documented but disabled in `models-template.ini` for explicit long-context
   experiments;
 - `131072` context and `2048` batch as the direct-run baseline;
-- backend-specific microbatch defaults: `512` for Vulkan/FP4 and `2048` for
+- backend-specific microbatch defaults: `512` for Vulkan/FPX and `2048` for
   stock ROCm;
-- `/dev/dri` for Vulkan/Vulkan FP4/Vulkan FPX and `/dev/dri` plus `/dev/kfd`
-  for ROCm/ROCm FP4/ROCmFPX;
+- `/dev/dri` for Vulkan/Vulkan FPX and `/dev/dri` plus `/dev/kfd` for
+  ROCm/ROCmFPX;
 - Hugging Face cache mounting through `HF_CACHE_DIR` and `HF_HOME`;
 - automatic `.env` loading for runtime environment variables.
 - `load-test` for bounded model-load smoke tests that start `llama-server`,

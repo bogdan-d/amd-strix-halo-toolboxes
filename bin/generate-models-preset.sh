@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfp4-only|--rocmfpx-only] [--rocmfp4-device DEVICE] [--rocmfpx-device DEVICE] <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfpx-only] [--rocmfpx-device DEVICE] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
@@ -13,11 +13,8 @@ Options:
   --with-non-reasoning  Add Qwen/Qwen-derived :non-reasoning variants.
   --with-vision         Add :vision variants for models with one paired mmproj GGUF.
   --with-configs        Refresh coding-tool configs from the generated preset.
-  --rocmfp4-only        Generate only ROCmFP4 presets for the custom fork image.
   --rocmfpx-only        Generate only ROCmFPX presets for the custom fork image.
-  --rocmfp4-device      Device name for ROCmFP4 presets. Default: ROCm0.
   --rocmfpx-device      Device name for ROCmFPX presets. Default: ROCm0.
-  --fp4-only            Alias for --rocmfp4-only.
   --fpx-only            Alias for --rocmfpx-only.
 EOF
 }
@@ -26,9 +23,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WITH_NON_REASONING=0
 WITH_VISION=0
 WITH_CONFIGS=0
-ROCMFP4_ONLY=0
 ROCMFPX_ONLY=0
-ROCMFP4_DEVICE=ROCm0
 ROCMFPX_DEVICE=ROCm0
 
 while [[ $# -gt 0 ]]; do
@@ -45,22 +40,9 @@ while [[ $# -gt 0 ]]; do
       WITH_CONFIGS=1
       shift
       ;;
-    --rocmfp4-only|--fp4-only)
-      ROCMFP4_ONLY=1
-      shift
-      ;;
     --rocmfpx-only|--fpx-only)
       ROCMFPX_ONLY=1
       shift
-      ;;
-    --rocmfp4-device)
-      if [[ $# -lt 2 || "$2" == --* ]]; then
-        echo "Missing value for --rocmfp4-device" >&2
-        usage >&2
-        exit 1
-      fi
-      ROCMFP4_DEVICE="$2"
-      shift 2
       ;;
     --rocmfpx-device)
       if [[ $# -lt 2 || "$2" == --* ]]; then
@@ -87,12 +69,6 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $# -lt 3 || $# -gt 4 ]]; then
-  usage >&2
-  exit 1
-fi
-
-if (( ROCMFP4_ONLY )) && (( ROCMFPX_ONLY )); then
-  echo "--rocmfp4-only and --rocmfpx-only are mutually exclusive" >&2
   usage >&2
   exit 1
 fi
@@ -230,27 +206,21 @@ is_crown_halo_mtp_dynamic_model() {
     [[ "$rel" =~ qwen3\.6-35b-a3b-crown-halo-mtp-dynamic ]]
 }
 
-is_rocmfp4_llamacpp_model() {
-  local rel="$1"
-  [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]] ||
-    [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]]
-}
-
 is_rocmfpx_llamacpp_model() {
   local rel="$1"
   [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp][Xx] ]] ||
-    [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp][368] ]] ||
-    [[ "$rel" =~ Q[368]_0_ROCMFPX ]]
+    [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp][3468] ]] ||
+    [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]]
 }
 
-is_qwopus_27b_coder_rocmfp4_model() {
+is_qwopus_27b_coder_rocmfpx_model() {
   local rel="$1"
-  [[ "$rel" =~ [Qq]wopus3\.6-27[Bb]-[Cc]oder-[Mm][Tt][Pp]-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+  [[ "$rel" =~ [Qq]wopus3\.6-27[Bb]-[Cc]oder-[Mm][Tt][Pp]-[Rr][Oo][Cc][Mm][Ff][Pp][4Xx] ]]
 }
 
-is_nex_n2_mini_rocmfp4_model() {
+is_nex_n2_mini_rocmfpx_model() {
   local rel="$1"
-  [[ "$rel" =~ [Nn]ex-[Nn]2-mini-[Rr][Oo][Cc][Mm][Ff][Pp]4 ]]
+  [[ "$rel" =~ [Nn]ex-[Nn]2-mini-[Rr][Oo][Cc][Mm][Ff][Pp][4Xx] ]]
 }
 
 model_author() {
@@ -286,83 +256,30 @@ is_imatrix_model() {
   [[ "$rel" =~ (^|[-_/])[Ii][Mm][Aa][Tt][Rr][Ii][Xx]($|[-_/]) ]]
 }
 
-rocmfp4_alias_quant() {
-  local rel="$1"
-  local stem
-
-  stem="$(filename_stem "$rel")"
-  if [[ "$stem" =~ (Q[0-9]+_[A-Za-z0-9_]+)_ROCMFP4 ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}"
-    return 0
-  fi
-
-  if [[ "$stem" =~ (UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?)(-to-[Rr][Oo][Cc][Mm][Ff][Pp]4|-mtp)?$ ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
-    return 0
-  fi
-
-  if [[ "$stem" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]; then
-    printf '%s\n' ROCmFP4
-  fi
-}
-
-rocmfp4_alias_model_name() {
-  local rel="$1"
-  local stem base_name_re
-
-  case "$rel" in
-    *Nex-N2-mini-ROCmFP4*|*nex-n2-mini-rocmfp4*)
-      printf '%s\n' Nex-N2-mini
-      ;;
-    *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' Chadrock3.6-35B-A3B-ACE-SABER
-      ;;
-    *CHADROCK3.6-35B-UNCENSORED-MTP-STRIX-LEAN*|*chadrock3.6-35b-uncensored-mtp-strix-lean*)
-      printf '%s\n' Chadrock3.6-35B
-      ;;
-    *qwopus3.6-27b-v2-chadrock-rocmfp4-mtp*|*Qwopus3.6-27B-v2-MTP-BF16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' Qwopus3.6-27B-v2-Chadrock
-      ;;
-    *Qwopus3.6-27B-v2-MTP-Q4_0_ROCMFP4*|*qwopus3.6-27b-v2-mtp-q4_0_rocmfp4*)
-      printf '%s\n' Qwopus3.6-27B-v2
-      ;;
-    *Qwopus3.6-35B-A3B-v1-MTP-Q4_0_ROCMFP4*|*qwopus3.6-35b-a3b-v1-mtp-q4_0_rocmfp4*)
-      printf '%s\n' Qwopus3.6-35B-A3B-v1
-      ;;
-    *)
-      stem="$(filename_stem "$rel")"
-      base_name_re='(^|[-_/])((Qwen|Qwopus|Chadrock|Nex|DeepSeek|Llama|Mistral|Mixtral|Gemma|Phi)[A-Za-z0-9.]*[-_][0-9]+(\.[0-9]+)?[Bb]([-_][A-Za-z][0-9]+[Bb])?([-_][Vv][0-9]+)?)'
-      if [[ "$stem" =~ $base_name_re ]]; then
-        printf '%s\n' "${BASH_REMATCH[2]//_/-}"
-        return 0
-      fi
-      stem="$(printf '%s\n' "$stem" | sed -E \
-        -e 's/[-_][Gg][Gg][Uu][Ff]$//' \
-        -e 's/[-_]?[Ss][Tt][Rr][Ii][Xx][_-]?[Ll][Ee][Aa][Nn]$//' \
-        -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
-        -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
-        -e 's/[-_]?Q[0-9]+_[A-Za-z0-9_]+_[Rr][Oo][Cc][Mm][Ff][Pp]4$//' \
-        -e 's/(^|[-_])[Mm][Tt][Pp]($|[-_])/-/g' \
-        -e 's/(^|[-_])[Uu][Nn][Cc][Ee][Nn][Ss][Oo][Rr][Ee][Dd]($|[-_])/-/g' \
-        -e 's/(^|[-_])[Uu][Nn][Cc]($|[-_])/-/g' \
-        -e 's/-+/-/g; s/_+/-/g; s/^-+//; s/-+$//')"
-      printf '%s\n' "$stem"
-      ;;
-  esac
-}
-
 rocmfpx_alias_quant() {
   local rel="$1"
   local stem haystack
 
   stem="$(filename_stem "$rel")"
   haystack="$rel"
-  if [[ "$haystack" =~ (Q[368]_0)_ROCMFPX ]]; then
+  if [[ "$haystack" =~ (Q[3468]_0)_ROCMFP[4X] ]]; then
     printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$haystack" =~ (Q[0-9]+_[A-Za-z0-9_]+)_ROCMFP[4Xx] ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "$stem" =~ (UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?)(-to-[Rr][Oo][Cc][Mm][Ff][Pp]([4Xx])|-mtp)?$ ]]; then
+    printf '%s\n' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
     return 0
   fi
   if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]3 ]]; then
     printf '%s\n' ROCmFP3
+    return 0
+  fi
+  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]; then
+    printf '%s\n' ROCmFP4
     return 0
   fi
   if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]6 ]]; then
@@ -382,6 +299,33 @@ rocmfpx_alias_model_name() {
   local rel="$1"
   local stem base_name_re first second rest
 
+  case "$rel" in
+    *Nex-N2-mini-ROCmFP4*|*nex-n2-mini-rocmfp4*|*Nex-N2-mini-ROCmFPX*|*nex-n2-mini-rocmfpx*)
+      printf '%s\n' Nex-N2-mini
+      return 0
+      ;;
+    *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
+      printf '%s\n' Chadrock3.6-35B-A3B-ACE-SABER
+      return 0
+      ;;
+    *CHADROCK3.6-35B-UNCENSORED-MTP-STRIX-LEAN*|*chadrock3.6-35b-uncensored-mtp-strix-lean*)
+      printf '%s\n' Chadrock3.6-35B
+      return 0
+      ;;
+    *qwopus3.6-27b-v2-chadrock-rocmfp4-mtp*|*Qwopus3.6-27B-v2-MTP-BF16-to-ROCmFP4-STRIX_LEAN*)
+      printf '%s\n' Qwopus3.6-27B-v2-Chadrock
+      return 0
+      ;;
+    *Qwopus3.6-27B-v2-MTP-Q4_0_ROCMFP4*|*qwopus3.6-27b-v2-mtp-q4_0_rocmfp4*)
+      printf '%s\n' Qwopus3.6-27B-v2
+      return 0
+      ;;
+    *Qwopus3.6-35B-A3B-v1-MTP-Q4_0_ROCMFP4*|*qwopus3.6-35b-a3b-v1-mtp-q4_0_rocmfp4*)
+      printf '%s\n' Qwopus3.6-35B-A3B-v1
+      return 0
+      ;;
+  esac
+
   stem="$(filename_stem "$rel")"
   IFS=/ read -r first second rest <<< "$rel"
   if [[ "$stem" =~ ^[Mm][Oo][Dd][Ee][Ll](-[0-9]+)?$ && -n "${second:-}" ]]; then
@@ -397,10 +341,10 @@ rocmfpx_alias_model_name() {
     -e 's/[-_][Gg][Gg][Uu][Ff]$//' \
     -e 's/[-_]?[Ss][Tt][Rr][Ii][Xx][_-]?(LEAN|SPEED|QUALITY)$//' \
     -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp][Xx]$//' \
-    -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp][368]$//' \
+    -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp][3468]$//' \
     -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp][Xx]$//' \
-    -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp][368]$//' \
-    -e 's/[-_]?Q[368]_0_[Rr][Oo][Cc][Mm][Ff][Pp][Xx](_AGENT)?$//' \
+    -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp][3468]$//' \
+    -e 's/[-_]?Q[3468]_0_[Rr][Oo][Cc][Mm][Ff][Pp]([Xx]|4)(_AGENT)?$//' \
     -e 's/[-_]?Q6_0_[Rr][Oo][Cc][Mm][Ff][Pp][Xx]_[Ss][Tt][Rr][Ii][Xx]_(LEAN|SPEED|QUALITY)$//' \
     -e 's/(^|[-_])[Mm][Tt][Pp]($|[-_])/-/g' \
     -e 's/(^|[-_])[Aa][Gg][Ee][Nn][Tt]($|[-_])/-/g' \
@@ -475,34 +419,6 @@ unique_alias() {
   done
 
   printf '%s\n' "$candidate"
-}
-
-rocmfp4_alias() {
-  local rel="$1"
-  shift
-  local model_name author quant moe mtp uncensored extra_tags
-
-  model_name="$(rocmfp4_alias_model_name "$rel")"
-  author="$(model_author "$rel")"
-  quant="$(rocmfp4_alias_quant "$rel")"
-  moe=0
-  if is_moe_model "$rel"; then
-    moe=1
-  fi
-  mtp=0
-  if is_mtp_model "$rel"; then
-    mtp=1
-  fi
-  uncensored=0
-  if is_uncensored_model "$rel"; then
-    uncensored=1
-  fi
-  extra_tags=()
-  if is_imatrix_model "$rel"; then
-    extra_tags+=(imatrix)
-  fi
-
-  format_model_alias "$model_name" "$author" "$moe" "$mtp" "$uncensored" "$quant" "${extra_tags[@]}" "$@"
 }
 
 rocmfpx_alias() {
@@ -617,7 +533,7 @@ emit_crown_halo_mtp_dynamic_variants() {
   emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off "$non_reasoning_alias"
 }
 
-emit_nex_n2_mini_rocmfp4_section() {
+emit_nex_n2_mini_rocmfpx_section() {
   local id="$1"
   local model_path="$2"
   local alias="$3"
@@ -630,7 +546,7 @@ emit_nex_n2_mini_rocmfp4_section() {
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'device = %s\n' "$ROCMFPX_DEVICE"
   printf 'batch-size = 2048\n'
   printf 'ubatch-size = 256\n'
   printf 'threads = 16\n'
@@ -648,7 +564,7 @@ emit_nex_n2_mini_rocmfp4_section() {
   printf 'mmap = off\n'
 }
 
-emit_rocmfp4_section() {
+emit_rocmfpx_section() {
   local id="$1"
   local model_path="$2"
   local mmproj_path="$3"
@@ -674,7 +590,7 @@ emit_rocmfp4_section() {
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'device = %s\n' "$ROCMFPX_DEVICE"
   printf 'batch-size = 2048\n'
   printf 'ubatch-size = 256\n'
   printf 'threads = 16\n'
@@ -695,7 +611,7 @@ emit_rocmfp4_section() {
   fi
 }
 
-emit_rocmfp4_variants() {
+emit_rocmfpx_variants() {
   local id="$1"
   local model_path="$2"
   local reasoning_alias="$3"
@@ -703,11 +619,11 @@ emit_rocmfp4_variants() {
   local mmproj_path="$5"
   local thinking="${6:-on}"
 
-  emit_rocmfp4_section "$id" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
-  emit_rocmfp4_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+  emit_rocmfpx_section "$id" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
+  emit_rocmfpx_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
 }
 
-emit_rocmfp4_mtp_section() {
+emit_rocmfpx_mtp_section() {
   local id="$1"
   local model_path="$2"
   local mmproj_path="$3"
@@ -733,7 +649,7 @@ emit_rocmfp4_mtp_section() {
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'device = %s\n' "$ROCMFPX_DEVICE"
   printf 'batch-size = 2048\n'
   printf 'ubatch-size = 256\n'
   printf 'threads = 16\n'
@@ -748,7 +664,7 @@ emit_rocmfp4_mtp_section() {
   printf 'top-k = 20\n'
   printf 'min-p = 0.0\n'
   printf 'spec-type = draft-mtp\n'
-  printf 'spec-draft-device = %s\n' "$ROCMFP4_DEVICE"
+  printf 'spec-draft-device = %s\n' "$ROCMFPX_DEVICE"
   printf 'spec-draft-ngl = all\n'
   printf 'spec-draft-type-k = f16\n'
   printf 'spec-draft-type-v = f16\n'
@@ -763,7 +679,7 @@ emit_rocmfp4_mtp_section() {
   fi
 }
 
-emit_rocmfp4_mtp_variants() {
+emit_rocmfpx_mtp_variants() {
   local id="$1"
   local model_path="$2"
   local reasoning_alias="$3"
@@ -771,8 +687,8 @@ emit_rocmfp4_mtp_variants() {
   local mmproj_path="$5"
   local thinking="${6:-on}"
 
-  emit_rocmfp4_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
-  emit_rocmfp4_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+  emit_rocmfpx_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
+  emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
 }
 
 emit_non_reasoning_section() {
@@ -811,7 +727,7 @@ else
 fi
 trap 'rm -f "$tmp_output"' EXIT
 
-if (( ROCMFP4_ONLY || ROCMFPX_ONLY )); then
+if (( ROCMFPX_ONLY )); then
   awk '
     /^[[:space:]]*checkpoint-min-step[[:space:]]*=/ { next }
     { print }
@@ -835,16 +751,10 @@ while IFS= read -r host_file; do
     continue
   fi
 
-  if (( ROCMFP4_ONLY )); then
-    if ! is_rocmfp4_llamacpp_model "$rel"; then
-      continue
-    fi
-  elif (( ROCMFPX_ONLY )); then
+  if (( ROCMFPX_ONLY )); then
     if ! is_rocmfpx_llamacpp_model "$rel"; then
       continue
     fi
-  elif is_rocmfp4_llamacpp_model "$rel"; then
-    continue
   elif is_rocmfpx_llamacpp_model "$rel"; then
     continue
   fi
@@ -870,15 +780,26 @@ while IFS= read -r host_file; do
   fi
 
   if is_rocmfpx_llamacpp_model "$rel"; then
-    ROCMFP4_DEVICE="$ROCMFPX_DEVICE"
+    if is_nex_n2_mini_rocmfpx_model "$rel"; then
+      alias="$(unique_alias "$(rocmfpx_alias "$rel")" "$rel")"
+      seen_aliases[$alias]=1
+      emit_nex_n2_mini_rocmfpx_section "$id" "$model_path" "$alias" >> "$tmp_output"
+      model_count=$((model_count + 1))
+      continue
+    fi
+
+    thinking=on
+    if is_qwopus_27b_coder_rocmfpx_model "$rel"; then
+      thinking=off
+    fi
     reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel")" "$rel")"
     seen_aliases[$reasoning_alias]=1
     non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" non-reasoning)" "$rel")"
     seen_aliases[$non_reasoning_alias]=1
     if is_mtp_model "$rel"; then
-      emit_rocmfp4_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" on >> "$tmp_output"
+      emit_rocmfpx_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
     else
-      emit_rocmfp4_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" on >> "$tmp_output"
+      emit_rocmfpx_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
     fi
     if (( WITH_VISION )); then
       mmproj_path="$(find_mmproj "$host_file" "$rel")"
@@ -888,49 +809,9 @@ while IFS= read -r host_file; do
         vision_non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" vision non-reasoning)" "$rel")"
         seen_aliases[$vision_non_reasoning_alias]=1
         if is_mtp_model "$rel"; then
-          emit_rocmfp4_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" on >> "$tmp_output"
+          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
         else
-          emit_rocmfp4_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" on >> "$tmp_output"
-        fi
-      fi
-    fi
-    model_count=$((model_count + 1))
-    continue
-  fi
-
-  if is_rocmfp4_llamacpp_model "$rel"; then
-    if is_nex_n2_mini_rocmfp4_model "$rel"; then
-      alias="$(unique_alias "$(rocmfp4_alias "$rel")" "$rel")"
-      seen_aliases[$alias]=1
-      emit_nex_n2_mini_rocmfp4_section "$id" "$model_path" "$alias" >> "$tmp_output"
-      model_count=$((model_count + 1))
-      continue
-    fi
-
-    thinking=on
-    if is_qwopus_27b_coder_rocmfp4_model "$rel"; then
-      thinking=off
-    fi
-    reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel")" "$rel")"
-    seen_aliases[$reasoning_alias]=1
-    non_reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel" non-reasoning)" "$rel")"
-    seen_aliases[$non_reasoning_alias]=1
-    if is_mtp_model "$rel"; then
-      emit_rocmfp4_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
-    else
-      emit_rocmfp4_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
-    fi
-    if (( WITH_VISION )); then
-      mmproj_path="$(find_mmproj "$host_file" "$rel")"
-      if [[ -n "$mmproj_path" ]]; then
-        vision_alias="$(unique_alias "$(rocmfp4_alias "$rel" vision)" "$rel")"
-        seen_aliases[$vision_alias]=1
-        vision_non_reasoning_alias="$(unique_alias "$(rocmfp4_alias "$rel" vision non-reasoning)" "$rel")"
-        seen_aliases[$vision_non_reasoning_alias]=1
-        if is_mtp_model "$rel"; then
-          emit_rocmfp4_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
-        else
-          emit_rocmfp4_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+          emit_rocmfpx_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
         fi
       fi
     fi
@@ -957,9 +838,7 @@ while IFS= read -r host_file; do
   model_count=$((model_count + 1))
 done < <(find -L "$MODELS_DIR" -type f -name '*.gguf' -printf '%p\n' | sort)
 
-if (( model_count == 0 )) && (( ROCMFP4_ONLY )); then
-  echo "generate-models-preset: warning: no ROCmFP4 llama.cpp GGUF models found under $MODELS_DIR" >&2
-elif (( model_count == 0 )) && (( ROCMFPX_ONLY )); then
+if (( model_count == 0 )) && (( ROCMFPX_ONLY )); then
   echo "generate-models-preset: warning: no ROCmFPX llama.cpp GGUF models found under $MODELS_DIR" >&2
 elif (( model_count == 0 )); then
   echo "generate-models-preset: warning: no non-mmproj GGUF models found under $MODELS_DIR" >&2
