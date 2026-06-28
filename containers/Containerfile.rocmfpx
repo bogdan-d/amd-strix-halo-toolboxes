@@ -1,12 +1,12 @@
-# llama.cpp image for the next raw Podman/Docker workflow.
+# ROCmFPX llama.cpp fork image for the next raw Podman/Docker workflow.
 #
 # Build from the repository root so this file can copy shared legacy assets:
-#   bin/build.sh rocm
-#   bin/build.sh rocm-next
-#   bin/build.sh vulkan
+#   bin/build.sh vulkan-fpx
+#   bin/build.sh rocm-fpx
+#   bin/build.sh rocm-next-fpx
 
 ARG FEDORA_VERSION=44
-ARG BUILD_TYPE=rocm
+ARG BUILD_TYPE=rocm-fpx
 ARG ROCM_VERSION=7.2.4
 ARG ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.4/main
 ARG ROCM_MAJOR_VERSION=7
@@ -15,9 +15,9 @@ ARG ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
 ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
 ARG ROCWMMA_FATTN=0
-ARG LLAMA_REPO=https://github.com/ggml-org/llama.cpp.git
-ARG LLAMA_BRANCH=master
-ARG LLAMA_REF=
+ARG LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git
+ARG LLAMA_BRANCH=main
+ARG LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b
 
 # build stage
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
@@ -36,7 +36,7 @@ ARG LLAMA_BRANCH
 ARG LLAMA_REF
 
 RUN case "${BUILD_TYPE}" in \
-  rocm|rocm-next|vulkan) ;; \
+  vulkan-fpx|rocm-fpx|rocm-next-fpx) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
@@ -60,7 +60,7 @@ RUN --mount=type=cache,id=dnf-rocm-base,target=/var/cache/libdnf5 \
 
 # ROCm stable: use AMD's published RHEL 10 repository. This is the stable ROCm
 # path and the only path that installs ROCm from RPMs in the runtime stage.
-RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
+RUN if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
@@ -73,7 +73,7 @@ RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
   fi
 
 RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   echo ">>> Installing ROCm ${ROCM_VERSION} builder packages"; \
   rocwmma_packages=""; \
   if [ "${ROCWMMA_FATTN}" = "1" ]; then \
@@ -92,7 +92,7 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
 # of installing ROCm packages there.
 WORKDIR /tmp
 RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
-  if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   set -euo pipefail; \
   if [ -n "${ROCM_NIGHTLY_TARBALL}" ]; then \
   key="${ROCM_NIGHTLY_TARBALL}"; \
@@ -123,10 +123,10 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   ln -s ../lib/llvm/amdgcn/bitcode /opt/rocm/amdgcn/bitcode; \
   fi
 
-# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. No ROCm runtime is
-# copied for this target; llama.cpp is built with GGML_VULKAN below.
+# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. ROCmFPX HIP builds
+# also enable Vulkan to match the fork's recommended fallback path.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan-fpx" ] || [ "${BUILD_TYPE}" = "rocm-fpx" ] || [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   echo ">>> Installing Vulkan RADV builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
@@ -150,11 +150,11 @@ ENV ROCM_PATH=/opt/rocm \
   CPATH=/opt/rocm/include \
   PKG_CONFIG_PATH=/opt/rocm/lib/pkgconfig
 
-# Shared llama.cpp checkout. The source cache is shared by all targets, while
-# each target uses its own CMake build directory to avoid stale backend state.
+# Shared ROCmFPX llama.cpp fork checkout. This file uses its own source cache so
+# stock llama.cpp builds do not churn the fork worktree between builds.
 WORKDIR /opt/llama.cpp
 
-RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Ensuring llama.cpp source checkout exists" \
   && \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
@@ -162,7 +162,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
-RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Updating llama.cpp source and applying local patch" \
   && \
   git reset --hard \
@@ -176,21 +176,19 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     git checkout --detach "${LLAMA_REF}"; \
   fi \
   && git submodule update --init --recursive \
-  && patch -p1 < /tmp/llama-grammar.patch \
+  && (patch -p1 < /tmp/llama-grammar.patch || grep -q '#define MAX_REPETITION_THRESHOLD 100000' src/llama-grammar.cpp) \
   && sed -i \
     's@^#define DEFAULT_INTERPOLATION_MODE (GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ANTIALIAS)$@#define DEFAULT_INTERPOLATION_MODE (uint32_t(GGML_SCALE_MODE_BILINEAR) | uint32_t(GGML_SCALE_FLAG_ANTIALIAS))@' \
     tools/mtmd/clip-graph.h \
   && grep -q 'uint32_t(GGML_SCALE_MODE_BILINEAR)' tools/mtmd/clip-graph.h
 
-# Backend-specific llama.cpp configuration. Keep the three target blocks close
-# together so it is clear which CMake flags belong to ROCm stable, ROCm next,
-# and Vulkan.
+# Backend-specific llama.cpp configuration for the ROCmFPX fork target.
 # CPU_TARGET controls the CPU code path independently from the GPU backend:
 # generic    portable AVX2 build, reproducible across normal x86_64 runners
 # strix-halo explicit Strix Halo AVX512/VNNI/BF16 features, reproducible when
 #             building on a runner whose compiler supports those switches
 # native     host-native detection for local experiments only
-RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Configuring and building llama.cpp for ${BUILD_TYPE}/${CPU_TARGET}" \
   && \
   case "${CPU_TARGET}" in \
@@ -200,57 +198,77 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
     *) echo "Unsupported CPU_TARGET: ${CPU_TARGET}" >&2; exit 1 ;; \
   esac \
   && rocwmma_flags="" \
-  && if [ "${ROCWMMA_FATTN}" = "1" ] && [ "${BUILD_TYPE}" != "vulkan" ]; then \
+  && if [ "${ROCWMMA_FATTN}" = "1" ] && [ "${BUILD_TYPE}" != "vulkan-fpx" ]; then \
   rocwmma_flags="-DGGML_HIP_ROCWMMA_FATTN=ON"; \
   fi \
   && build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
   && rm -rf "${build_dir}" \
-  && if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  && if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
+    -DGGML_HIP_FORCE_MMQ=ON \
+    -DGGML_VULKAN=ON \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     ${rocwmma_flags} \
-    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
-    -DAMDGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
+    -DGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
+    -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_WEBUI=OFF \
+    -DLLAMA_USE_PREBUILT_WEBUI=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
-    -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
+    -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
-    -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
-  elif [ "${BUILD_TYPE}" = "rocm-next" ]; then \
+  elif [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_HIP=ON \
+    -DGGML_HIP_FORCE_MMQ=ON \
+    -DGGML_VULKAN=ON \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     ${rocwmma_flags} \
-    -DCMAKE_HIP_FLAGS="--rocm-path=/opt/rocm -mllvm --amdgpu-unroll-threshold-local=600" \
-    -DAMDGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
+    -DGPU_TARGETS="${GFX_TARGET}" \
+    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
+    -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_WEBUI=OFF \
+    -DLLAMA_USE_PREBUILT_WEBUI=OFF \
     -DLLAMA_BUILD_TESTS=OFF \
-    -DGGML_CUDA_ENABLE_UNIFIED_MEMORY=ON \
+    -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
-    -DLLAMA_HIP_UMA=ON \
     -DHIP_PLATFORM=amd; \
-  elif [ "${BUILD_TYPE}" = "vulkan" ]; then \
+  elif [ "${BUILD_TYPE}" = "vulkan-fpx" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
     -DGGML_VULKAN=ON \
+    -DGGML_HIP=OFF \
+    -DGGML_CUDA=OFF \
     ${cpu_flags} \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
     -DGGML_CCACHE=OFF \
-    -DLLAMA_BUILD_TESTS=OFF; \
+    -DLLAMA_BUILD_SERVER=ON \
+    -DLLAMA_BUILD_WEBUI=OFF \
+    -DLLAMA_USE_PREBUILT_WEBUI=OFF \
+    -DLLAMA_BUILD_TESTS=OFF \
+    -DGGML_BUILD_TESTS=OFF; \
   fi \
   && cmake --build "${build_dir}" --config Release \
     --target llama-server llama-cli llama-bench llama-gguf-split llama-quantize
 
-RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
+RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Installing llama.cpp runtime artifacts" \
   && \
   build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
@@ -265,9 +283,7 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
   && ldconfig
 
-# Runtime ROCm payload: official ROCm installs packages in the final stage, so
-# only the nightly tarball target needs a copied /opt/rocm runtime tree.
-RUN if [ "${BUILD_TYPE}" = "rocm-next" ]; then \
+RUN if [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   echo ">>> Trimming ROCm nightly runtime payload"; \
   find /opt/rocm -type f -name '*.a' -delete; \
   rm -rf \
@@ -291,13 +307,13 @@ ARG ROCM_VERSION
 ARG ROCM_REPO_URL
 
 RUN case "${BUILD_TYPE}" in \
-  rocm|rocm-next|vulkan) ;; \
+  vulkan-fpx|rocm-fpx|rocm-next-fpx) ;; \
   *) echo "Unsupported BUILD_TYPE: ${BUILD_TYPE}" >&2; exit 1 ;; \
   esac
 
 # ROCm stable runtime packages come from AMD's repository. Nightlies bring their
 # own /opt/rocm tree from the builder; Vulkan uses only Fedora Mesa packages.
-RUN if [ "${BUILD_TYPE}" = "rocm" ]; then \
+RUN if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
   "name=ROCm${ROCM_VERSION}" \
@@ -321,7 +337,7 @@ RUN --mount=type=cache,id=dnf-rocm-runtime,target=/var/cache/libdnf5 \
 
 # ROCm stable runtime: install only the runtime libraries needed by llama.cpp.
 RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "rocm" ]; then \
+  if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   echo ">>> Installing ROCm ${ROCM_VERSION} runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
@@ -329,10 +345,10 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
   hip-runtime-amd rocblas hipblas rocminfo; \
   fi
 
-# Vulkan RADV runtime: Mesa driver and Vulkan loader from Fedora. Only /dev/dri
-# is required at run time for this target.
+# Vulkan RADV runtime: ROCmFPX HIP images include Fedora Mesa RADV as the
+# fork-recommended fallback backend.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan" ]; then \
+  if [ "${BUILD_TYPE}" = "vulkan-fpx" ] || [ "${BUILD_TYPE}" = "rocm-fpx" ] || [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   echo ">>> Installing Vulkan RADV runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \

@@ -60,14 +60,18 @@ bin/run.sh rocm-7.2.4 load-test \
 
 Supported backend names include logical aliases such as `vulkan`, `rocm`,
 `rocm-7.2.4`, `rocm-next`, `rocm7-nightlies`, and the explicit experimental
-`vulkan-rfp4`, `rocm-rfp4`, and `rocm-next-rfp4` fork targets, plus explicit
+`vulkan-fp4`, `rocm-fp4`, `rocm-next-fp4`, `vulkan-fpx`, `rocm-fpx`, and
+`rocm-next-fpx` fork targets, plus explicit
 build tags from `bin/build.sh` such as `vulkan-strix-halo`,
 `rocm-strix-halo`, `rocm-7.2.4-strix-halo`, `rocm-next-native`,
-`vulkan-rfp4-strix-halo`, `rocm-rfp4-strix-halo`, and
-`rocm-next-rfp4-strix-halo`. When `CPU_TARGET` is not `generic`,
+`vulkan-fp4-strix-halo`, `rocm-fp4-strix-halo`, and
+`rocm-next-fp4-strix-halo`, `vulkan-fpx-strix-halo`,
+`rocm-fpx-strix-halo`, and `rocm-next-fpx-strix-halo`. When `CPU_TARGET` is not `generic`,
 `bin/run.sh rocm ...`, `bin/run.sh rocm-7.2.4 ...`,
-`bin/run.sh rocm-next ...`, `bin/run.sh vulkan-rfp4 ...`,
-`bin/run.sh rocm-rfp4 ...`, `bin/run.sh rocm-next-rfp4 ...`, and
+`bin/run.sh rocm-next ...`, `bin/run.sh vulkan-fp4 ...`,
+`bin/run.sh rocm-fp4 ...`, `bin/run.sh rocm-next-fp4 ...`,
+`bin/run.sh vulkan-fpx ...`, `bin/run.sh rocm-fpx ...`,
+`bin/run.sh rocm-next-fpx ...`, and
 `bin/run.sh vulkan ...` resolve to the matching CPU-target tag automatically.
 
 For MTP builds:

@@ -11,6 +11,7 @@ The current next workflow builds only:
 - `llama-cli`
 - `llama-bench`
 - `llama-gguf-split`
+- `llama-quantize`
 
 ## Runtime Targets
 
@@ -20,6 +21,7 @@ The current next workflow builds only:
 | `llama-cli` | Terminal inference tool for one-shot prompts, chat, device listing, and quick model checks. | Kept. Used by `cli` and `list-devices`. |
 | `llama-bench` | Throughput/latency benchmark tool. | Kept. Used by `bench`. |
 | `llama-gguf-split` | Split or combine large GGUF model files. | Kept. Useful model-file utility. |
+| `llama-quantize` | Quantize model weights. | Kept. Needed for ROCmFPX/ROCmFP4 model prep in the fork images and useful in stock images. |
 | `llama-mtmd-cli` | Standalone multimodal CLI for image/audio-capable models using the mtmd path. | Not built. Reconsider if testing multimodal outside `llama-server`. |
 | `llama-embedding` | Standalone embedding example/tool. | Not built. Reconsider for dedicated embedding tests outside server mode. |
 | `llama-tokenize` | Tokenization helper for inspecting prompt tokenization. | Not built. Reconsider when debugging templates or context usage. |
@@ -30,7 +32,6 @@ The current next workflow builds only:
 | :--- | :--- | :--- |
 | `llama-gguf` | Inspect or manipulate GGUF metadata. | Not built. |
 | `llama-gguf-hash` | Hash GGUF contents for integrity or reproducibility checks. | Not built. |
-| `llama-quantize` | Quantize model weights. | Not built. Keep quantization outside runtime images for now. |
 | `llama-imatrix` | Generate importance matrices used by quantization workflows. | Not built. |
 | `llama-perplexity` | Measure perplexity for model evaluation. | Not built. |
 | `llama-export-lora` | Export LoRA data. | Not built. |
@@ -87,7 +88,7 @@ Good first additions if the workflow expands:
 - Add `llama-mtmd-cli` for standalone multimodal testing.
 - Add `llama-tokenize` for prompt/template debugging.
 - Add `llama-gguf` and `llama-gguf-hash` for local model inspection.
-- Add `llama-quantize` and `llama-imatrix` only if quantization should happen
-  inside these runtime images.
+- Add `llama-imatrix` if importance-matrix generation should happen inside
+  these runtime images.
 - Add `rpc-server` only if distributed inference returns to the next workflow;
   that also requires re-enabling `GGML_RPC`.

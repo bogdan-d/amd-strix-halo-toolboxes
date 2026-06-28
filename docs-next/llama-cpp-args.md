@@ -60,11 +60,12 @@ that model, with display aliases such as
 `Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)`.
 
 The generated ROCmFP4 routes are another exception and require a custom fork
-image, not stock llama.cpp. Use `vulkan-rfp4` for Vulkan, `rocm-rfp4` for
-stable ROCm, or `rocm-next-rfp4` for ROCm nightlies.
+image, not stock llama.cpp. Use `vulkan-fp4` for Vulkan, `rocm-fp4` for
+stable ROCm, or `rocm-next-fp4` for ROCm nightlies. ROCmFPX GGUFs use the newer
+ROCmFPX fork images: `vulkan-fpx`, `rocm-fpx`, or `rocm-next-fpx`.
 They keep the author profile in the model sections: `ctx-size = 262144`,
-`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-rfp4`,
-`ROCm0` for ROCm RFP4), `batch-size = 2048`, `ubatch-size = 256`,
+`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-fp4`,
+`ROCm0` for ROCm FP4), `batch-size = 2048`, `ubatch-size = 256`,
 `threads = 16`, `threads-batch = 16`, `cache-type-k/v = f16`,
 `ctx-checkpoints = 32`, `cache-reuse = 256`, `cache-ram = 65536`,
 `reasoning-format = deepseek` for reasoning-on routes, metrics enabled, and
@@ -86,7 +87,7 @@ Nex-N2-mini keeps the same non-speculative runtime profile with
 `ctx-size = 131072` and no MTP/draft flags.
 `bin/run.sh` sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` and `GGML_HIP_ENABLE_UNIFIED_MEMORY=1` for
-the ROCm RFP4 backends.
+the ROCm FP4 backends.
 
 ## Mental Model
 

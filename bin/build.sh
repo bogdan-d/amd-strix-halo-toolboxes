@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan|vulkan-rfp4|rocm-rfp4|rocm-next-rfp4]...
+  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan|vulkan-fp4|rocm-fp4|rocm-next-fp4|vulkan-fpx|rocm-fpx|rocm-next-fpx]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -13,19 +13,29 @@ Environment:
   ROCMFP4_CONTAINERFILE
                      ROCmFP4 Containerfile path.
                      Default: containers/Containerfile.rocmfp4
+  ROCMFPX_CONTAINERFILE
+                     ROCmFPX Containerfile path.
+                     Default: containers/Containerfile.rocmfpx
   ROCM_VERSION       Stable ROCm version for the rocm target. Default: 7.2.4
   LLAMA_REPO         llama.cpp repository for stock backends.
                      Default: https://github.com/ggml-org/llama.cpp.git
   LLAMA_BRANCH       llama.cpp branch for stock backends. Default: master
   LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
   ROCMFP4_LLAMA_REPO
-                     llama.cpp fork for RFP4 targets.
+                     llama.cpp fork for FP4 targets.
                      Default: https://github.com/charlie12345/rocmfp4-llama.git
   ROCMFP4_LLAMA_BRANCH
-                     llama.cpp fork branch for RFP4 targets.
+                     llama.cpp fork branch for FP4 targets.
                      Default: mtp-rocmfp4-strix
-  ROCMFP4_LLAMA_REF  llama.cpp fork ref for RFP4 targets.
+  ROCMFP4_LLAMA_REF  llama.cpp fork ref for FP4 targets.
                      Default: 4795079b04f5e0ada6e5d2e85b12bac1e27e7873
+  ROCMFPX_LLAMA_REPO
+                     llama.cpp fork for FPX targets.
+                     Default: https://github.com/charlie12345/ROCmFPX.git
+  ROCMFPX_LLAMA_BRANCH
+                     llama.cpp fork branch for FPX targets. Default: main
+  ROCMFPX_LLAMA_REF  llama.cpp fork ref for FPX targets.
+                     Default: 014cd28b97d539a0365979d88e9846fad5aa822b
   ROCM_NIGHTLY_TARBALL
                      TheRock tarball for rocm-next targets. Default:
                      therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
@@ -51,9 +61,12 @@ Examples:
   bin/build.sh rocm=7.2.4
   bin/build.sh rocm-next
   bin/build.sh vulkan
-  bin/build.sh vulkan-rfp4
-  bin/build.sh rocm-rfp4
-  bin/build.sh rocm-next-rfp4
+  bin/build.sh vulkan-fp4
+  bin/build.sh rocm-fp4
+  bin/build.sh rocm-next-fp4
+  bin/build.sh vulkan-fpx
+  bin/build.sh rocm-fpx
+  bin/build.sh rocm-next-fpx
   bin/build.sh --no-cache rocm rocm-next
   bin/build.sh --with-rocwmma rocm rocm-next
   BUILDER=podman bin/build.sh all
@@ -68,6 +81,7 @@ BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/strix-llama}"
 CONTAINERFILE="${CONTAINERFILE:-containers/Containerfile}"
 ROCMFP4_CONTAINERFILE="${ROCMFP4_CONTAINERFILE:-containers/Containerfile.rocmfp4}"
+ROCMFPX_CONTAINERFILE="${ROCMFPX_CONTAINERFILE:-containers/Containerfile.rocmfpx}"
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 LLAMA_REPO="${LLAMA_REPO:-https://github.com/ggml-org/llama.cpp.git}"
 LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
@@ -75,6 +89,9 @@ LLAMA_REF="${LLAMA_REF:-}"
 ROCMFP4_LLAMA_REPO="${ROCMFP4_LLAMA_REPO:-https://github.com/charlie12345/rocmfp4-llama.git}"
 ROCMFP4_LLAMA_BRANCH="${ROCMFP4_LLAMA_BRANCH:-mtp-rocmfp4-strix}"
 ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-4795079b04f5e0ada6e5d2e85b12bac1e27e7873}"
+ROCMFPX_LLAMA_REPO="${ROCMFPX_LLAMA_REPO:-https://github.com/charlie12345/ROCmFPX.git}"
+ROCMFPX_LLAMA_BRANCH="${ROCMFPX_LLAMA_BRANCH:-main}"
+ROCMFPX_LLAMA_REF="${ROCMFPX_LLAMA_REF:-014cd28b97d539a0365979d88e9846fad5aa822b}"
 ROCM_NIGHTLY_TARBALL="${ROCM_NIGHTLY_TARBALL-${ROCMFP4_ROCM_NIGHTLY_TARBALL-therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz}}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
@@ -124,7 +141,7 @@ for target in "$@"; do
     all)
       TARGETS+=(rocm rocm-next vulkan)
       ;;
-    rocm|rocm-next|vulkan|vulkan-rfp4|rocm-rfp4|rocm-next-rfp4)
+    rocm|rocm-next|vulkan|vulkan-fp4|rocm-fp4|rocm-next-fp4|vulkan-fpx|rocm-fpx|rocm-next-fpx)
       TARGETS+=("$target")
       ;;
     rocm=7.2.3|rocm:7.2.3|rocm-7.2.3)
@@ -200,11 +217,16 @@ build_image() {
   local llama_branch="$LLAMA_BRANCH"
   local llama_ref="$LLAMA_REF"
 
-  if [[ "$build_type" == *-rfp4 ]]; then
+  if [[ "$build_type" == *-fp4 ]]; then
     containerfile="$ROCMFP4_CONTAINERFILE"
     llama_repo="$ROCMFP4_LLAMA_REPO"
     llama_branch="$ROCMFP4_LLAMA_BRANCH"
     llama_ref="$ROCMFP4_LLAMA_REF"
+  elif [[ "$build_type" == *-fpx ]]; then
+    containerfile="$ROCMFPX_CONTAINERFILE"
+    llama_repo="$ROCMFPX_LLAMA_REPO"
+    llama_branch="$ROCMFPX_LLAMA_BRANCH"
+    llama_ref="$ROCMFPX_LLAMA_REF"
   fi
 
   if [[ "$NO_CACHE" == "1" ]]; then
@@ -245,25 +267,46 @@ build_image() {
         fi
       fi
       ;;
-    vulkan-rfp4)
+    vulkan-fp4)
       if [[ "$CPU_TARGET" == "generic" ]]; then
-        tag_args=(-t "$IMAGE_PREFIX:vulkan-rfp4")
+        tag_args=(-t "$IMAGE_PREFIX:vulkan-fp4")
       else
-        tag_args=(-t "$IMAGE_PREFIX:vulkan-rfp4-$CPU_TARGET")
+        tag_args=(-t "$IMAGE_PREFIX:vulkan-fp4-$CPU_TARGET")
       fi
       ;;
-    rocm-rfp4)
+    rocm-fp4)
       if [[ "$CPU_TARGET" == "generic" ]]; then
-        tag_args=(-t "$IMAGE_PREFIX:rocm-rfp4")
+        tag_args=(-t "$IMAGE_PREFIX:rocm-fp4")
       else
-        tag_args=(-t "$IMAGE_PREFIX:rocm-rfp4-$CPU_TARGET")
+        tag_args=(-t "$IMAGE_PREFIX:rocm-fp4-$CPU_TARGET")
       fi
       ;;
-    rocm-next-rfp4)
+    rocm-next-fp4)
       if [[ "$CPU_TARGET" == "generic" ]]; then
-        tag_args=(-t "$IMAGE_PREFIX:rocm-next-rfp4")
+        tag_args=(-t "$IMAGE_PREFIX:rocm-next-fp4")
       else
-        tag_args=(-t "$IMAGE_PREFIX:rocm-next-rfp4-$CPU_TARGET")
+        tag_args=(-t "$IMAGE_PREFIX:rocm-next-fp4-$CPU_TARGET")
+      fi
+      ;;
+    rocm-fpx)
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocm-fpx")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:rocm-fpx-$CPU_TARGET")
+      fi
+      ;;
+    vulkan-fpx)
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:vulkan-fpx")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:vulkan-fpx-$CPU_TARGET")
+      fi
+      ;;
+    rocm-next-fpx)
+      if [[ "$CPU_TARGET" == "generic" ]]; then
+        tag_args=(-t "$IMAGE_PREFIX:rocm-next-fpx")
+      else
+        tag_args=(-t "$IMAGE_PREFIX:rocm-next-fpx-$CPU_TARGET")
       fi
       ;;
     vulkan)
