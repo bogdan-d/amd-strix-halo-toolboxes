@@ -1,0 +1,71 @@
+diff --git a/common/chat-diff-analyzer.cpp b/common/chat-diff-analyzer.cpp
+index 9b2f7d1..f2f6a5a 100644
+--- a/common/chat-diff-analyzer.cpp
++++ b/common/chat-diff-analyzer.cpp
+@@ -136,18 +136,21 @@ static const std::vector<template_patch_rule> k_patch_rules = {
+       },
+       // Fireworks
+       [](const common_chat_template & tmpl, autoparser & analysis) -> void {
++          (void) analysis;
+           if (tmpl.src.find("{%- set system_prompt = '<|start_header_id|>' + 'system' + '<|end_header_id|>\\n\\n'"
+             " + message['content'] | trim + '\\n' + system_prompt_suffix + '<|eot_id|>' -%}") != std::string::npos) {
+               LOG_DBG(ANSI_ORANGE "[Patch: Fireworks v2]\n" ANSI_RESET);
+           }
+       },
+       // Solar Open
+       [](const common_chat_template & tmpl, autoparser & analysis) -> void {
++          (void) analysis;
+           if (tmpl.src.find("<|begin|>assistant<|think|><|end|>") != std::string::npos) {
+               LOG_DBG(ANSI_ORANGE "[Patch: Solar Open]\n" ANSI_RESET);
+           }
+       },
+       // Apriel 1.6
+       [](const common_chat_template & tmpl, autoparser & analysis) -> void {
++          (void) analysis;
+           if (tmpl.src.find("if not loop.last and '[BEGIN FINAL RESPONSE]' in asst_text") != std::string::npos) {
+               LOG_DBG(ANSI_ORANGE "[Patch: Apriel 1.6]\n" ANSI_RESET);
+           }
+diff --git a/ggml/src/ggml-cpu/ops.cpp b/ggml/src/ggml-cpu/ops.cpp
+index 3ec5f9f..1c50ad6 100644
+--- a/ggml/src/ggml-cpu/ops.cpp
++++ b/ggml/src/ggml-cpu/ops.cpp
+@@ -5659,6 +5659,8 @@ void ggml_compute_forward_clamp(
+         case GGML_TYPE_Q3_0_ROCMFPX:
+         case GGML_TYPE_Q6_0_ROCMFPX:
+         case GGML_TYPE_Q8_0_ROCMFPX:
++        case GGML_TYPE_TURBO3_0:
++        case GGML_TYPE_TURBO4_0:
+         case GGML_TYPE_Q2_K:
+         case GGML_TYPE_Q3_K:
+         case GGML_TYPE_Q4_K:
+diff --git a/ggml/src/ggml-quants.c b/ggml/src/ggml-quants.c
+index c534c05..11ce955 100644
+--- a/ggml/src/ggml-quants.c
++++ b/ggml/src/ggml-quants.c
+@@ -809,6 +809,13 @@ void dequantize_row_turbo4_0(const block_turbo4_0 * GGML_RESTRICT x, float * GG
+ // TurboQuant vec_dot (for flash attention compatibility)
+ // ============================================================
+ 
++void ggml_vec_dot_turbo3_0(int n, float * GGML_RESTRICT s, size_t bs,
++                            const void * GGML_RESTRICT vx, size_t bx,
++                            const void * GGML_RESTRICT vy, size_t by, int nrc);
++void ggml_vec_dot_turbo4_0(int n, float * GGML_RESTRICT s, size_t bs,
++                            const void * GGML_RESTRICT vx, size_t bx,
++                            const void * GGML_RESTRICT vy, size_t by, int nrc);
++
+ void ggml_vec_dot_turbo3_0(int n, float * GGML_RESTRICT s, size_t bs,
+                             const void * GGML_RESTRICT vx, size_t bx,
+                             const void * GGML_RESTRICT vy, size_t by, int nrc) {
+diff --git a/src/llama-model.cpp b/src/llama-model.cpp
+index 3f85a39..41703c5 100644
+--- a/src/llama-model.cpp
++++ b/src/llama-model.cpp
+@@ -2389,6 +2389,8 @@ llama_rope_type llama_model_rope_type(const llama_model * model) {
+         case LLM_ARCH_QWEN3NEXT:
+         case LLM_ARCH_MIMO2:
+         case LLM_ARCH_STEP35:
++        case LLM_ARCH_TALKIE:
++        case LLM_ARCH_MELLUM:
+         case LLM_ARCH_HYV3:
+             return LLAMA_ROPE_TYPE_NEOX;
+ 

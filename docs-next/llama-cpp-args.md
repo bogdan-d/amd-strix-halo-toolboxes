@@ -65,7 +65,7 @@ stable ROCm, or `rocm-next-fp4` for ROCm nightlies. ROCmFPX GGUFs use the newer
 ROCmFPX fork images: `vulkan-fpx`, `rocm-fpx`, or `rocm-next-fpx`.
 They keep the author profile in the model sections: `ctx-size = 262144`,
 `parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-fp4`,
-`ROCm0` for ROCm FP4), `batch-size = 2048`, `ubatch-size = 256`,
+`ROCm0` for ROCm FP4/FPX), `batch-size = 2048`, `ubatch-size = 256`,
 `threads = 16`, `threads-batch = 16`, `cache-type-k/v = f16`,
 `ctx-checkpoints = 32`, `cache-reuse = 256`, `cache-ram = 65536`,
 `reasoning-format = deepseek` for reasoning-on routes, metrics enabled, and
@@ -73,9 +73,9 @@ They keep the author profile in the model sections: `ctx-size = 262144`,
 `[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
 `spec-draft-type-k/v = f16`, `spec-draft-n-max = 5`, and
 `spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
-preset sections, so generated ROCmFP4 presets omit that direct-command
+preset sections, so generated ROCmFP4/ROCmFPX presets omit that direct-command
 `-cpent` setting. The generator emits display aliases for each known
-compatible ROCmFP4 model using model name and size, bracketed
+compatible ROCmFP4/ROCmFPX model using model name and size, bracketed
 capabilities/quantization/route tags, and the model author in parentheses,
 for example `Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
 `Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`.
@@ -150,7 +150,7 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. In server use, `ctx-size` is the total KV/context pool and is split across slots. |
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
 | `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Maximum context checkpoints per slot. Active Qwen3.6 presets use `32` to avoid repeated full prompt re-processing in 4-slot agent runs. |
-| `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Current image default is `256`; active presets set `256` explicitly. |
+| `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Stock active presets set `256`; generated FP4/FPX fork presets omit it because the fork rejects it inside preset sections. |
 | `-cram`, `--cache-ram` | both | RAM limit for prompt/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
 
 The current Vulkan image was tested with `llama-server --help`: it accepts

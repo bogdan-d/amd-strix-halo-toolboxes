@@ -166,28 +166,31 @@ bin/build.sh rocm-next-fpx
 bin/run.sh rocm-next-fpx list-devices
 ```
 
-For those backends, `bin/run.sh` automatically generates an FP4-only preset.
-For the ROCm FP4 backends it also sets `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus
-`GGML_HIP_ENABLE_UNIFIED_MEMORY=1`. Normal generated presets skip ROCmFP4
-GGUFs so stock images do not expose routes that cannot load. The ROCmFP4
-profile emits reasoning-enabled and non-reasoning routes per compatible model.
+For those backends, `bin/run.sh` automatically generates an FP4-only or
+FPX-only preset as appropriate. For the ROCm FP4/FPX backends it also sets
+`HSA_OVERRIDE_GFX_VERSION=11.5.1` plus `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`.
+Normal generated presets skip ROCmFP4 and ROCmFPX GGUFs so stock images do not
+expose routes that cannot load. The fork profile emits reasoning-enabled and
+non-reasoning routes per compatible model.
 Only models identified as MTP-capable get `:mtp` route IDs, `[MTP]` aliases,
 and `draft-mtp` flags. Generated aliases follow the normal display-name
 pattern: model name and size first, bracketed capabilities/quantization next,
 and the model author last, for example
-`Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
-`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`. Non-reasoning and
+`Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)`,
+`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`, or
+`Qwopus3.6-27B [MTP] [Q6_0] (Jackrong)`. Non-reasoning and
 vision routes add their route tags before the author.
-Both routes keep the author profile in the model section:
-262144 context, backend-specific device selection (`Vulkan0` for
-`vulkan-fp4`, `ROCm0` for ROCm FP4), `b2048/u256`, f16 main and draft KV,
+Both FP4 and FPX routes keep the author profile in the model section:
+262144 context, backend-specific device selection (`Vulkan0` for Vulkan fork
+images, `ROCm0` for ROCm fork images), `b2048/u256`, f16 main and draft KV,
 `draft-mtp` depth 5, 32 context checkpoints, `cache-reuse = 256`,
 `cache-ram = 65536`, DeepSeek reasoning format for the reasoning-on route,
 metrics, and `mmap` off. MTP-capable ROCmFP4 routes also add `draft-mtp`
-depth 5 with f16 draft KV. The fork rejects `checkpoint-min-step` inside model
-preset sections, so generated ROCmFP4 sections omit it even though the model
-cards show `-cpent 256` in direct command examples. The Plunderstruck ROCmFP4
-models share this profile; when `--with-vision` is used and a same-directory
+depth 5 with f16 draft KV; ROCmFPX MTP routes use the same profile. The fork
+rejects `checkpoint-min-step` inside model preset sections, so generated
+ROCmFP4/ROCmFPX presets omit it even though some model cards show `-cpent 256`
+in direct command examples. The Plunderstruck ROCmFP4 models share this
+profile; when `--with-vision` is used and a same-directory
 `mmproj-F32.gguf` exists, the generated vision routes add `mmproj` and
 `image-min-tokens = 1024`. `Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` keeps those
 runtime flags but follows its model card's agentic-use guidance by adding
@@ -281,9 +284,9 @@ bin/generate-models-preset.sh --with-non-reasoning --with-vision --with-configs 
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models.ini
 ```
 
-For the ROCmFP4 custom backends, use `--rocmfp4-only` directly or let
-`bin/run.sh vulkan-fp4 ...`, `bin/run.sh rocm-fp4 ...`, or
-`bin/run.sh rocm-next-fp4 ...` add it automatically:
+For the ROCmFP4/ROCmFPX custom backends, use `--rocmfp4-only` or
+`--rocmfpx-only` directly, or let `bin/run.sh` add the right flag for the
+`*-fp4` and `*-fpx` backends:
 
 ```bash
 bin/generate-models-preset.sh --rocmfp4-only --with-configs \
@@ -291,6 +294,9 @@ bin/generate-models-preset.sh --rocmfp4-only --with-configs \
 
 bin/generate-models-preset.sh --rocmfp4-only --rocmfp4-device Vulkan0 \
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfp4-vulkan.ini
+
+bin/generate-models-preset.sh --rocmfpx-only --rocmfpx-device ROCm0 \
+  "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfpx.ini
 ```
 
 The generator writes:

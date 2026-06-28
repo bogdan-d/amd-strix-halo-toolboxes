@@ -15,6 +15,7 @@ ARG ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
 ARG GFX_TARGET=gfx1151
 ARG CPU_TARGET=generic
 ARG ROCWMMA_FATTN=0
+ARG ROCMFPX_DECODE_TUNE=stable
 ARG LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git
 ARG LLAMA_BRANCH=main
 ARG LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b
@@ -31,6 +32,7 @@ ARG ROCM_NIGHTLY_TARBALL
 ARG GFX_TARGET
 ARG CPU_TARGET
 ARG ROCWMMA_FATTN
+ARG ROCMFPX_DECODE_TUNE
 ARG LLAMA_REPO
 ARG LLAMA_BRANCH
 ARG LLAMA_REF
@@ -43,6 +45,16 @@ RUN case "${BUILD_TYPE}" in \
 RUN case "${ROCWMMA_FATTN}" in \
   0|1) ;; \
   *) echo "Unsupported ROCWMMA_FATTN: ${ROCWMMA_FATTN}" >&2; exit 1 ;; \
+  esac
+
+RUN case "${ROCMFPX_DECODE_TUNE}" in \
+  stable|"") ;; \
+  rocmfpx-strix-moe-rpb1|rocmfpx-strix-moe-rpb2|rocmfpx-strix-moe-rpb3|rocmfpx-strix-moe-rpb4) ;; \
+  rocmfpx-strix-nwarps1|rocmfpx-strix-nwarps2|rocmfpx-strix-nwarps4) ;; \
+  rocmfpx-strix-rpb2) ;; \
+  rocmfpx-strix-mmid1|rocmfpx-strix-mmid2|rocmfpx-strix-mmid3|rocmfpx-strix-mmid4) ;; \
+  rocmfpx-strix-vdr2|rocmfpx-strix-vdr8) ;; \
+  *) echo "Unsupported ROCMFPX_DECODE_TUNE: ${ROCMFPX_DECODE_TUNE}" >&2; exit 1 ;; \
   esac
 
 # Keep downloaded RPMs in the Buildah cache mount. The cache is not committed
@@ -160,6 +172,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
+COPY containers/rocmfpx-warning.patch /tmp/rocmfpx-warning.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
 RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
@@ -177,6 +190,10 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   fi \
   && git submodule update --init --recursive \
   && (patch -p1 < /tmp/llama-grammar.patch || grep -q '#define MAX_REPETITION_THRESHOLD 100000' src/llama-grammar.cpp) \
+  && (patch --forward -p1 < /tmp/rocmfpx-warning.patch || \
+    (awk '/case LLM_ARCH_STEP35:/,/return LLAMA_ROPE_TYPE_NEOX/' src/llama-model.cpp | grep -q 'case LLM_ARCH_TALKIE:' \
+      && grep -q 'case GGML_TYPE_TURBO3_0:' ggml/src/ggml-cpu/ops.cpp \
+      && grep -q '(void) analysis;' common/chat-diff-analyzer.cpp)) \
   && sed -i \
     's@^#define DEFAULT_INTERPOLATION_MODE (GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ANTIALIAS)$@#define DEFAULT_INTERPOLATION_MODE (uint32_t(GGML_SCALE_MODE_BILINEAR) | uint32_t(GGML_SCALE_FLAG_ANTIALIAS))@' \
     tools/mtmd/clip-graph.h \
@@ -198,8 +215,32 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     *) echo "Unsupported CPU_TARGET: ${CPU_TARGET}" >&2; exit 1 ;; \
   esac \
   && rocwmma_flags="" \
+  && if [ "${BUILD_TYPE}" != "vulkan-fpx" ]; then \
+  rocwmma_flags="-DGGML_HIP_ROCWMMA_FATTN=OFF"; \
+  fi \
   && if [ "${ROCWMMA_FATTN}" = "1" ] && [ "${BUILD_TYPE}" != "vulkan-fpx" ]; then \
   rocwmma_flags="-DGGML_HIP_ROCWMMA_FATTN=ON"; \
+  fi \
+  && decode_tune_flags="" \
+  && case "${ROCMFPX_DECODE_TUNE}" in \
+    stable|"") decode_tune_flags="" ;; \
+    rocmfpx-strix-moe-rpb1) decode_tune_flags="-DGGML_ROCMFPX_MOE_MMVQ_ROWS_PER_BLOCK=1" ;; \
+    rocmfpx-strix-moe-rpb2) decode_tune_flags="-DGGML_ROCMFPX_MOE_MMVQ_ROWS_PER_BLOCK=2" ;; \
+    rocmfpx-strix-moe-rpb3) decode_tune_flags="-DGGML_ROCMFPX_MOE_MMVQ_ROWS_PER_BLOCK=3" ;; \
+    rocmfpx-strix-moe-rpb4) decode_tune_flags="-DGGML_ROCMFPX_MOE_MMVQ_ROWS_PER_BLOCK=4" ;; \
+    rocmfpx-strix-nwarps1) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_NWARPS=1" ;; \
+    rocmfpx-strix-nwarps2) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_NWARPS=2" ;; \
+    rocmfpx-strix-nwarps4) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_NWARPS=4" ;; \
+    rocmfpx-strix-rpb2) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_RPB_WIDE=2" ;; \
+    rocmfpx-strix-mmid1) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_MMID_MAX_BATCH=1" ;; \
+    rocmfpx-strix-mmid2) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_MMID_MAX_BATCH=2" ;; \
+    rocmfpx-strix-mmid3) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_MMID_MAX_BATCH=3" ;; \
+    rocmfpx-strix-mmid4) decode_tune_flags="-DGGML_ROCMFPX_RDNA35_MMID_MAX_BATCH=4" ;; \
+    rocmfpx-strix-vdr2) decode_tune_flags="-DGGML_ROCMFP6_Q8_1_MMVQ_VDR=2" ;; \
+    rocmfpx-strix-vdr8) decode_tune_flags="-DGGML_ROCMFP6_Q8_1_MMVQ_VDR=8" ;; \
+  esac \
+  && if [ -n "${decode_tune_flags}" ]; then \
+  echo ">>> ROCmFPX decode tuning profile: ${ROCMFPX_DECODE_TUNE}"; \
   fi \
   && build_dir="build-${BUILD_TYPE}-${CPU_TARGET}" \
   && rm -rf "${build_dir}" \
@@ -213,7 +254,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     ${rocwmma_flags} \
     -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
     -DGPU_TARGETS="${GFX_TARGET}" \
-    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
+    -DCMAKE_HIP_FLAGS="${decode_tune_flags} -Wno-nan-infinity-disabled" \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
@@ -221,7 +262,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_TESTS=ON \
     -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
@@ -236,7 +277,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     ${rocwmma_flags} \
     -DCMAKE_HIP_ARCHITECTURES="${GFX_TARGET}" \
     -DGPU_TARGETS="${GFX_TARGET}" \
-    -DCMAKE_HIP_FLAGS="-Wno-nan-infinity-disabled" \
+    -DCMAKE_HIP_FLAGS="${decode_tune_flags} -Wno-nan-infinity-disabled" \
     -DCMAKE_CXX_FLAGS="-Wno-nonnull" \
     -DCMAKE_BUILD_TYPE=Release \
     -DGGML_RPC=OFF \
@@ -244,7 +285,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_TESTS=ON \
     -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
@@ -262,11 +303,21 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=OFF \
+    -DLLAMA_BUILD_TESTS=ON \
     -DGGML_BUILD_TESTS=OFF; \
   fi \
   && cmake --build "${build_dir}" --config Release \
-    --target llama-server llama-cli llama-bench llama-gguf-split llama-quantize
+    --target \
+    llama-server \
+    llama-cli \
+    llama-bench \
+    llama-gguf-split \
+    llama-quantize \
+    llama-completion \
+    llama-perplexity \
+    test-backend-ops \
+    test-quantize-fns \
+    test-quantize-perf
 
 RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Installing llama.cpp runtime artifacts" \
@@ -279,6 +330,11 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     "/opt/llama.cpp/${build_dir}/bin/llama-bench" \
     "/opt/llama.cpp/${build_dir}/bin/llama-gguf-split" \
     "/opt/llama.cpp/${build_dir}/bin/llama-quantize" \
+    "/opt/llama.cpp/${build_dir}/bin/llama-completion" \
+    "/opt/llama.cpp/${build_dir}/bin/llama-perplexity" \
+    "/opt/llama.cpp/${build_dir}/bin/test-backend-ops" \
+    "/opt/llama.cpp/${build_dir}/bin/test-quantize-fns" \
+    "/opt/llama.cpp/${build_dir}/bin/test-quantize-perf" \
     /usr/local/bin/ \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
   && ldconfig

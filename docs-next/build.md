@@ -171,6 +171,24 @@ bin/build.sh rocm-next-fpx
 ROCMFPX_LLAMA_REF=main bin/build.sh rocm-fpx
 ```
 
+Optional ROCmFPX Strix decode tuning profiles mirror the fork's
+`scripts/rocmfp4-decode-tune-flags.sh` helpers. Default is `stable`, matching
+the maintainer's conservative build. Use these only for controlled experiments:
+
+```bash
+ROCMFPX_DECODE_TUNE=rocmfpx-strix-nwarps2 bin/build.sh rocm-fpx
+```
+
+Accepted ROCmFPX profiles are:
+
+```text
+rocmfpx-strix-nwarps1, rocmfpx-strix-nwarps2, rocmfpx-strix-nwarps4
+rocmfpx-strix-rpb2
+rocmfpx-strix-mmid1, rocmfpx-strix-mmid2, rocmfpx-strix-mmid3, rocmfpx-strix-mmid4
+rocmfpx-strix-moe-rpb1, rocmfpx-strix-moe-rpb2, rocmfpx-strix-moe-rpb3, rocmfpx-strix-moe-rpb4
+rocmfpx-strix-vdr2, rocmfpx-strix-vdr8
+```
+
 The ROCmFP4 HIP builds follow the fork's Strix-oriented CMake defaults:
 `GGML_HIP=ON`, `GGML_HIP_FORCE_MMQ=ON`, `GGML_VULKAN=ON`, `GGML_CUDA=OFF`,
 and both `CMAKE_HIP_ARCHITECTURES` and `GPU_TARGETS` set to this repo's
@@ -182,6 +200,11 @@ Containerfile, `containers/Containerfile.rocmfp4` does not add the local
 Clang diagnostics from the fork's intentional HIP fast-math setting.
 The ROCmFP4 Vulkan build follows the fork's Vulkan-only defaults:
 `GGML_VULKAN=ON`, `GGML_HIP=OFF`, and `GGML_CUDA=OFF`.
+
+The ROCmFPX HIP builds follow the same backend flags and also build the fork's
+validation-facing targets used by its smoke scripts: `llama-completion`,
+`llama-perplexity`, `test-backend-ops`, `test-quantize-fns`, and
+`test-quantize-perf`.
 
 The default CPU target is `generic`, which disables host-native CPU detection so
 local and future GitHub runner builds do not silently differ. Use

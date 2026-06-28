@@ -36,6 +36,9 @@ Environment:
                      llama.cpp fork branch for FPX targets. Default: main
   ROCMFPX_LLAMA_REF  llama.cpp fork ref for FPX targets.
                      Default: 014cd28b97d539a0365979d88e9846fad5aa822b
+  ROCMFPX_DECODE_TUNE
+                     Optional ROCmFPX Strix decode tuning profile.
+                     Default: stable
   ROCM_NIGHTLY_TARBALL
                      TheRock tarball for rocm-next targets. Default:
                      therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz
@@ -92,6 +95,7 @@ ROCMFP4_LLAMA_REF="${ROCMFP4_LLAMA_REF:-4795079b04f5e0ada6e5d2e85b12bac1e27e7873
 ROCMFPX_LLAMA_REPO="${ROCMFPX_LLAMA_REPO:-https://github.com/charlie12345/ROCmFPX.git}"
 ROCMFPX_LLAMA_BRANCH="${ROCMFPX_LLAMA_BRANCH:-main}"
 ROCMFPX_LLAMA_REF="${ROCMFPX_LLAMA_REF:-014cd28b97d539a0365979d88e9846fad5aa822b}"
+ROCMFPX_DECODE_TUNE="${ROCMFPX_DECODE_TUNE:-stable}"
 ROCM_NIGHTLY_TARBALL="${ROCM_NIGHTLY_TARBALL-${ROCMFP4_ROCM_NIGHTLY_TARBALL-therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz}}"
 CPU_TARGET="${CPU_TARGET:-generic}"
 TAG_VERSION="${TAG_VERSION:-1}"
@@ -184,6 +188,20 @@ case "$ROCWMMA_FATTN" in
   0|1) ;;
   *)
     echo "ROCWMMA_FATTN must be 0 or 1, got: $ROCWMMA_FATTN" >&2
+    usage
+    exit 1
+    ;;
+esac
+
+case "$ROCMFPX_DECODE_TUNE" in
+  stable|"") ;;
+  rocmfpx-strix-moe-rpb1|rocmfpx-strix-moe-rpb2|rocmfpx-strix-moe-rpb3|rocmfpx-strix-moe-rpb4) ;;
+  rocmfpx-strix-nwarps1|rocmfpx-strix-nwarps2|rocmfpx-strix-nwarps4) ;;
+  rocmfpx-strix-rpb2) ;;
+  rocmfpx-strix-mmid1|rocmfpx-strix-mmid2|rocmfpx-strix-mmid3|rocmfpx-strix-mmid4) ;;
+  rocmfpx-strix-vdr2|rocmfpx-strix-vdr8) ;;
+  *)
+    echo "Unsupported ROCMFPX_DECODE_TUNE: $ROCMFPX_DECODE_TUNE" >&2
     usage
     exit 1
     ;;
@@ -335,6 +353,7 @@ build_image() {
       --build-arg "ROCM_NIGHTLY_TARBALL=$ROCM_NIGHTLY_TARBALL" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
+      --build-arg "ROCMFPX_DECODE_TUNE=$ROCMFPX_DECODE_TUNE" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$containerfile" \
@@ -355,6 +374,7 @@ build_image() {
       --build-arg "ROCM_NIGHTLY_TARBALL=$ROCM_NIGHTLY_TARBALL" \
       --build-arg "CPU_TARGET=$CPU_TARGET" \
       --build-arg "ROCWMMA_FATTN=$ROCWMMA_FATTN" \
+      --build-arg "ROCMFPX_DECODE_TUNE=$ROCMFPX_DECODE_TUNE" \
       "${cache_args[@]}" \
       "${tag_args[@]}" \
       -f "$containerfile" \

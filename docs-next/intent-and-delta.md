@@ -75,7 +75,10 @@ isolated because ROCmFP4 GGUFs require
 `charlie12345/rocmfp4-llama`; all FP4 targets default to branch
 `mtp-rocmfp4-strix` pinned at `4795079b04f5e0ada6e5d2e85b12bac1e27e7873`.
 The `*-fpx` targets use `charlie12345/ROCmFPX` branch `main` pinned at
-`014cd28b97d539a0365979d88e9846fad5aa822b`.
+`014cd28b97d539a0365979d88e9846fad5aa822b`. Those images also build the
+fork's local validation tools (`llama-completion`, `llama-perplexity`,
+`test-backend-ops`, `test-quantize-fns`, and `test-quantize-perf`) because the
+ROCmFPX repo's smoke and regression scripts use them.
 
 ## Build Workflow
 
@@ -96,6 +99,8 @@ Important behavior added locally:
   the explicit FP4 fork targets;
 - `ROCMFPX_LLAMA_REPO`, `ROCMFPX_LLAMA_BRANCH`, and `ROCMFPX_LLAMA_REF` for
   the explicit FPX fork target;
+- `ROCMFPX_DECODE_TUNE` for opt-in Strix ROCmFPX decode launch tuning while
+  keeping the default profile at the fork's conservative `stable` setting;
 - `CPU_TARGET=generic|strix-halo|native`, with `generic` as the reproducible
   default;
 - `ROCWMMA_FATTN=1` or `bin/build.sh --with-rocwmma` to opt ROCm builds into
@@ -131,10 +136,9 @@ Important defaults:
   `reasoning = off` and non-thinking sampling defaults;
 - automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
   for paths or filenames containing `MTP` or `mtp`;
-- FP4-only generated presets for `bin/run.sh vulkan-fp4 ...`,
-  `bin/run.sh rocm-fp4 ...`, and `bin/run.sh rocm-next-fp4 ...`, with normal
-  generated presets excluding ROCmFP4 GGUFs so stock images do not route to
-  incompatible models;
+- FP4-only and FPX-only generated presets for the `*-fp4` and `*-fpx`
+  backends, with normal generated presets excluding ROCmFP4/ROCmFPX GGUFs so
+  stock images do not route to incompatible models;
 - generated presets keep shared defaults in `[*]`; this can expose a broken
   `default` router model, so clients should not request `default`;
 - `-fa 1` for direct server, MTP server, CLI, and bench;

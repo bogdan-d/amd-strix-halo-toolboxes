@@ -378,6 +378,13 @@ if [[ "$BACKEND_FAMILY" == *-fp4 ]]; then
   else
     GENERATE_MODELS_PRESET_ARGS+=(--rocmfp4-device ROCm0)
   fi
+elif [[ "$BACKEND_FAMILY" == *-fpx ]]; then
+  GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-only)
+  if [[ "$BACKEND_FAMILY" == vulkan-fpx ]]; then
+    GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device Vulkan0)
+  else
+    GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device ROCm0)
+  fi
 fi
 if [[ "$BACKEND_FAMILY" == rocm*-fp4 || "$BACKEND_FAMILY" == rocm*-fpx ]]; then
   HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"

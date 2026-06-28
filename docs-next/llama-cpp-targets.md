@@ -5,13 +5,21 @@ into the next-workflow images. It is based on the `llama*` tools observed in the
 locally built `rocm`, `rocm-next`, and `vulkan` images before narrowing the
 build targets.
 
-The current next workflow builds only:
+The current stock and ROCmFP4 next-workflow images build:
 
 - `llama-server`
 - `llama-cli`
 - `llama-bench`
 - `llama-gguf-split`
 - `llama-quantize`
+
+The ROCmFPX images also build the maintainer fork's validation tools:
+
+- `llama-completion`
+- `llama-perplexity`
+- `test-backend-ops`
+- `test-quantize-fns`
+- `test-quantize-perf`
 
 ## Runtime Targets
 
@@ -33,7 +41,7 @@ The current next workflow builds only:
 | `llama-gguf` | Inspect or manipulate GGUF metadata. | Not built. |
 | `llama-gguf-hash` | Hash GGUF contents for integrity or reproducibility checks. | Not built. |
 | `llama-imatrix` | Generate importance matrices used by quantization workflows. | Not built. |
-| `llama-perplexity` | Measure perplexity for model evaluation. | Not built. |
+| `llama-perplexity` | Measure perplexity for model evaluation. | ROCmFPX only. |
 | `llama-export-lora` | Export LoRA data. | Not built. |
 | `llama-finetune` | Fine-tuning utility. | Not built. |
 | `llama-cvector-generator` | Generate control vectors. | Not built. |
@@ -55,7 +63,7 @@ The current next workflow builds only:
 | `llama-lookup-stats` | Inspect lookup data statistics. | Not built. |
 | `llama-passkey` | Long-context passkey retrieval evaluation. | Not built. |
 | `llama-retrieval` | Retrieval example using embeddings. | Not built. |
-| `llama-completion` | Completion example/tool. | Not built. |
+| `llama-completion` | Completion example/tool. | ROCmFPX only. Used by several fork smoke scripts. |
 | `llama-simple` | Minimal inference example. | Not built. |
 | `llama-simple-chat` | Minimal chat example. | Not built. |
 | `llama-eval-callback` | Evaluation callback example. | Not built. |
@@ -79,6 +87,9 @@ The current next workflow builds only:
 | `llama-debug-template-parser` | Chat-template parser debug utility. | Not built. |
 | `llama-template-analysis` | Chat-template analysis tool. | Not built. |
 | `llama-gen-docs` | Generate llama.cpp argument documentation from built metadata. | Not built. Build/dev only. |
+| `test-backend-ops` | Backend operation regression test. | ROCmFPX only. |
+| `test-quantize-fns` | Quantization correctness regression test. | ROCmFPX only. |
+| `test-quantize-perf` | Quantization performance regression test. | ROCmFPX only. |
 | `rpc-server` | RPC backend worker for distributed llama.cpp runs. | Not built. RPC is intentionally disabled in the next Containerfile. |
 
 ## Reconsideration Notes
