@@ -101,6 +101,8 @@ Important behavior added locally:
   `.build-logs/` while printing phase markers and important warnings/errors.
 
 See [build.md](build.md) for commands and smoke tests.
+See [rocmfpx-fork.md](rocmfpx-fork.md) for notes on the ROCmFPX fork,
+quantization profile meanings, and Strix profile tradeoffs.
 
 ## Runtime Workflow
 

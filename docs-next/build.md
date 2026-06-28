@@ -164,6 +164,12 @@ validation-facing targets used by its smoke scripts: `llama-completion`,
 `llama-perplexity`, `test-backend-ops`, `test-quantize-fns`, and
 `test-quantize-perf`.
 
+The fork also exposes quantization-time profiles such as `PROFILE=agent`,
+`PROFILE=strix-lean`, `PROFILE=strix-speed`, and `PROFILE=strix-quality` through
+its `scripts/quantize-rocmfpx-agent.sh` wrapper. Those are model tensor-routing
+recipes, not build targets. See [rocmfpx-fork.md](rocmfpx-fork.md) for the
+profile map and tradeoffs.
+
 The default CPU target is `generic`, which disables host-native CPU detection so
 local and future GitHub runner builds do not silently differ. Use
 `CPU_TARGET=strix-halo` to enable explicit Strix Halo AVX512/VNNI/BF16 flags, or

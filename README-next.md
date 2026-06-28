@@ -16,6 +16,7 @@ This file tracks the experimental container workflow that should stay separate f
 - [llama.cpp argument map](docs-next/llama-cpp-args.md)
 - [llama.cpp target reference](docs-next/llama-cpp-targets.md)
 - [Podman workflow](docs-next/podman.md)
+- [ROCmFPX fork notes](docs-next/rocmfpx-fork.md)
 
 ## Podman without Toolbx or Distrobox
 
