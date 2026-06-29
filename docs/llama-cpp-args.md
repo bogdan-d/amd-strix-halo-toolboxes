@@ -52,34 +52,44 @@ These are the first knobs to decide for this repo.
 
 The generated `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` routes are a
 model-card exception to the shared defaults: they keep `ctx-size = 131072`,
-`parallel = 1`, `split-mode = row`, `cache-type-k/v = f16`,
-`spec-draft-type-k/v = f16`, `spec-draft-n-max = 4`, the Strix polling flags,
-and `batch-size = 2048` / `ubatch-size = 512` directly in the model sections.
+`parallel = 1`, `split-mode = row`, `spec-draft-type-k/v = f16`,
+`spec-draft-n-max = 2`, the Strix polling flags, and `batch-size = 2048` /
+`ubatch-size = 512` directly in the model sections.
 The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model, with display aliases such as
 `Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)`.
 
+Regardless of family or variant, MoE models (architectures like `A3B`/`A14B`
+or names containing `MoE`) override `spec-draft-n-max = 2`; dense models keep
+their family default (3 for generic n-gram MTP, 5 for ROCmFPX MTP). Crown Halo
+is always a MoE model, so it always uses 2.
+
 The generated ROCmFPX routes are another exception and require a custom fork
 image, not stock llama.cpp. Use `vulkan-fpx`, `rocm-fpx`, or `rocm-next-fpx`.
 Existing ROCmFP4-named GGUF/config patterns are treated as ROCmFPX-compatible.
-They keep the author profile in the model sections: `ctx-size = 262144`,
-`parallel = 1`, backend-specific `device` (`Vulkan0` for `vulkan-fpx`,
-`ROCm0` for ROCm FPX), `batch-size = 2048`, `ubatch-size = 256`,
-`threads = 16`, `threads-batch = 16`, `cache-type-k/v = f16`,
-`ctx-checkpoints = 32`, `cache-reuse = 256`, `cache-ram = 65536`,
-`reasoning-format = deepseek` for reasoning-on routes, metrics enabled, and
-`mmap = off`. Only models identified as MTP-capable get `:mtp` route IDs,
+The shared runtime/cache defaults come from the global `[*]` section of
+`models-template.ini`: `ctx-size = 262144`, `threads = 16` /
+`threads-batch = 16`, `batch-size = 2048`, `cache-type-k/v = f16`,
+`cache-reuse = 256`, `ctx-checkpoints = 32`, `cache-ram = 65536`, `mmap = off`,
+`metrics = true`, and the base `chat-template-kwargs = {"preserve_thinking": true}`.
+Every generated section is pinned to a single device via `--device`
+(`Vulkan0` for vulkan backends, `ROCm0` for ROCm; default `ROCm0`). ROCm device
+sections also emit `ubatch-size = 256` (the ROCm microbatch limit); Vulkan
+sections inherit `1024` from the `[*]` default. Crown Halo (`512`) and Nex
+(`256`) keep fixed ubatch sizes regardless of device. Each ROCmFPX section only
+overrides what differs: `reasoning-format = deepseek` for reasoning-on routes.
+Only models identified as MTP-capable get `:mtp` route IDs,
 `[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
-`spec-draft-type-k/v = f16`, `spec-draft-n-max = 5`, and
-`spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
+`spec-draft-type-k/v = f16`, `spec-draft-n-max = 5` (MoE models override to 2),
+and `spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
 preset sections, so generated ROCmFPX presets omit that direct-command
 `-cpent` setting. The generator emits display aliases for each known
 compatible ROCmFPX model using model name and size, bracketed
 capabilities/quantization/route tags, and the model author in parentheses,
 for example `Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
 `Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`.
-`--with-vision` adds `mmproj` plus
-`image-min-tokens = 1024` for paired Plunderstruck projectors. Qwopus3.6 Coder
+`--with-vision` adds `mmproj` plus `image-min-tokens = 1024` for paired
+Plunderstruck projectors. Qwopus3.6 Coder
 keeps the same runtime profile but adds the model-card thinking-off kwargs
 `{"enable_thinking": false, "preserve_thinking": true}` for agentic use.
 Nex-N2-mini keeps the same non-speculative runtime profile with

@@ -316,13 +316,13 @@ esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
+if [[ "$BACKEND_FAMILY" == vulkan* ]]; then
+  GENERATE_MODELS_PRESET_ARGS+=(--device Vulkan0)
+else
+  GENERATE_MODELS_PRESET_ARGS+=(--device ROCm0)
+fi
 if [[ "$BACKEND_FAMILY" == *-fpx ]]; then
   GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-only)
-  if [[ "$BACKEND_FAMILY" == vulkan-fpx ]]; then
-    GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device Vulkan0)
-  else
-    GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-device ROCm0)
-  fi
 fi
 if [[ "$BACKEND_FAMILY" == rocm*-fpx ]]; then
   HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-11.5.1}"

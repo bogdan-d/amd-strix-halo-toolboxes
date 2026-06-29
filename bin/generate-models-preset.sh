@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfpx-only] [--rocmfpx-device DEVICE] <models-dir> <container-models-dir> <template> [output]
+  bin/generate-models-preset.sh [--with-non-reasoning] [--with-vision] [--with-configs] [--rocmfpx-only] [--device DEVICE] <models-dir> <container-models-dir> <template> [output]
 
 Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
@@ -14,7 +14,7 @@ Options:
   --with-vision         Add :vision variants for models with one paired mmproj GGUF.
   --with-configs        Refresh coding-tool configs from the generated preset.
   --rocmfpx-only        Generate only ROCmFPX presets for the custom fork image.
-  --rocmfpx-device      Device name for ROCmFPX presets. Default: ROCm0.
+  --device              Device name for all generated presets. Default: ROCm0.
   --fpx-only            Alias for --rocmfpx-only.
 EOF
 }
@@ -24,7 +24,7 @@ WITH_NON_REASONING=0
 WITH_VISION=0
 WITH_CONFIGS=0
 ROCMFPX_ONLY=0
-ROCMFPX_DEVICE=ROCm0
+LLAMA_DEVICE=ROCm0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,13 +44,13 @@ while [[ $# -gt 0 ]]; do
       ROCMFPX_ONLY=1
       shift
       ;;
-    --rocmfpx-device)
+    --device)
       if [[ $# -lt 2 || "$2" == --* ]]; then
-        echo "Missing value for --rocmfpx-device" >&2
+        echo "Missing value for --device" >&2
         usage >&2
         exit 1
       fi
-      ROCMFPX_DEVICE="$2"
+      LLAMA_DEVICE="$2"
       shift 2
       ;;
     --)
@@ -460,15 +460,26 @@ emit_model_section() {
   local model_path="$2"
   local mmproj_path="$3"
   local mtp="$4"
+  local moe="${5:-0}"
+  local skip_ubatch="${6:-0}"
 
   printf '\n[%s]\n' "$id"
   printf 'model = %s\n' "$model_path"
+  printf 'device = %s\n' "$LLAMA_DEVICE"
+  if [[ "$LLAMA_DEVICE" == ROCm* ]] && (( ! skip_ubatch )); then
+    printf 'ubatch-size = 256\n'
+  fi
   if [[ -n "$mmproj_path" ]]; then
     printf 'mmproj = %s\n' "$mmproj_path"
+    printf 'image-min-tokens = 1024\n'
   fi
   if [[ "$mtp" == "1" ]]; then
     printf 'spec-type = draft-mtp,ngram-map-k4v\n'
-    printf 'spec-draft-n-max = 3\n'
+    if (( moe )); then
+      printf 'spec-draft-n-max = 2\n'
+    else
+      printf 'spec-draft-n-max = 3\n'
+    fi
     printf 'spec-draft-type-k = q8_0\n'
     printf 'spec-draft-type-v = q8_0\n'
     printf 'spec-ngram-map-k4v-size-n = 16\n'
@@ -482,8 +493,9 @@ emit_crown_halo_mtp_dynamic_section() {
   local model_path="$2"
   local reasoning="$3"
   local alias="$4"
+  local moe="${5:-0}"
 
-  emit_model_section "$id" "$model_path" "" 0
+  emit_model_section "$id" "$model_path" "" 0 0 1
   printf 'alias = %s\n' "$alias"
   printf 'ctx-size = 131072\n'
   printf 'reasoning = %s\n' "$reasoning"
@@ -497,11 +509,12 @@ emit_crown_halo_mtp_dynamic_section() {
   printf 'flash-attn = on\n'
   printf 'batch-size = 2048\n'
   printf 'ubatch-size = 512\n'
-  printf 'threads = 16\n'
-  printf 'cache-type-k = f16\n'
-  printf 'cache-type-v = f16\n'
   printf 'spec-type = draft-mtp\n'
-  printf 'spec-draft-n-max = 4\n'
+  if (( moe )); then
+    printf 'spec-draft-n-max = 2\n'
+  else
+    printf 'spec-draft-n-max = 4\n'
+  fi
   printf 'spec-draft-type-k = f16\n'
   printf 'spec-draft-type-v = f16\n'
   printf 'parallel = 1\n'
@@ -522,6 +535,7 @@ emit_crown_halo_mtp_dynamic_variants() {
   local id="$1"
   local model_path="$2"
   local rel="$3"
+  local moe="${4:-0}"
   local reasoning_alias non_reasoning_alias
 
   reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel")" "$rel")"
@@ -529,8 +543,8 @@ emit_crown_halo_mtp_dynamic_variants() {
   non_reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel" non-reasoning)" "$rel")"
   seen_aliases[$non_reasoning_alias]=1
 
-  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on "$reasoning_alias"
-  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off "$non_reasoning_alias"
+  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on "$reasoning_alias" "$moe"
+  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off "$non_reasoning_alias" "$moe"
 }
 
 emit_nex_n2_mini_rocmfpx_section() {
@@ -538,7 +552,7 @@ emit_nex_n2_mini_rocmfpx_section() {
   local model_path="$2"
   local alias="$3"
 
-  emit_model_section "$id" "$model_path" "" 0
+  emit_model_section "$id" "$model_path" "" 0 0 1
   printf 'alias = %s\n' "$alias"
   printf 'ctx-size = 131072\n'
   printf 'reasoning = off\n'
@@ -546,16 +560,9 @@ emit_nex_n2_mini_rocmfpx_section() {
   printf 'jinja = true\n'
   printf 'n-gpu-layers = 999\n'
   printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFPX_DEVICE"
   printf 'batch-size = 2048\n'
   printf 'ubatch-size = 256\n'
-  printf 'threads = 16\n'
-  printf 'threads-batch = 16\n'
-  printf 'cache-type-k = f16\n'
-  printf 'cache-type-v = f16\n'
-  printf 'ctx-checkpoints = 32\n'
   printf 'cache-reuse = 256\n'
-  printf 'cache-ram = 65536\n'
   printf 'temp = 0.6\n'
   printf 'top-p = 0.95\n'
   printf 'top-k = 20\n'
@@ -574,40 +581,14 @@ emit_rocmfpx_section() {
 
   emit_model_section "$id" "$model_path" "$mmproj_path" 0
   printf 'alias = %s\n' "$alias"
-  printf 'ctx-size = 262144\n'
   printf 'reasoning = %s\n' "$reasoning"
   if [[ "$thinking" == "off" ]]; then
     printf 'reasoning-format = deepseek\n'
     printf 'chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}\n'
   elif [[ "$reasoning" == "off" ]]; then
     printf 'reasoning-format = none\n'
-    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
   else
     printf 'reasoning-format = deepseek\n'
-    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
-  fi
-  printf 'parallel = 1\n'
-  printf 'jinja = true\n'
-  printf 'n-gpu-layers = 999\n'
-  printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFPX_DEVICE"
-  printf 'batch-size = 2048\n'
-  printf 'ubatch-size = 256\n'
-  printf 'threads = 16\n'
-  printf 'threads-batch = 16\n'
-  printf 'cache-type-k = f16\n'
-  printf 'cache-type-v = f16\n'
-  printf 'ctx-checkpoints = 32\n'
-  printf 'cache-reuse = 256\n'
-  printf 'cache-ram = 65536\n'
-  printf 'temp = 0.6\n'
-  printf 'top-p = 0.95\n'
-  printf 'top-k = 20\n'
-  printf 'min-p = 0.0\n'
-  printf 'metrics = true\n'
-  printf 'mmap = off\n'
-  if [[ -n "$mmproj_path" ]]; then
-    printf 'image-min-tokens = 1024\n'
   fi
 }
 
@@ -624,59 +605,21 @@ emit_rocmfpx_variants() {
 }
 
 emit_rocmfpx_mtp_section() {
-  local id="$1"
-  local model_path="$2"
-  local mmproj_path="$3"
-  local reasoning="$4"
-  local alias="$5"
-  local thinking="$6"
-
-  emit_model_section "$id" "$model_path" "$mmproj_path" 0
-  printf 'alias = %s\n' "$alias"
-  printf 'ctx-size = 262144\n'
-  printf 'reasoning = %s\n' "$reasoning"
-  if [[ "$thinking" == "off" ]]; then
-    printf 'reasoning-format = deepseek\n'
-    printf 'chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}\n'
-  elif [[ "$reasoning" == "off" ]]; then
-    printf 'reasoning-format = none\n'
-    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
-  else
-    printf 'reasoning-format = deepseek\n'
-    printf 'chat-template-kwargs = {"preserve_thinking": true}\n'
-  fi
-  printf 'parallel = 1\n'
-  printf 'jinja = true\n'
-  printf 'n-gpu-layers = 999\n'
-  printf 'flash-attn = on\n'
-  printf 'device = %s\n' "$ROCMFPX_DEVICE"
-  printf 'batch-size = 2048\n'
-  printf 'ubatch-size = 256\n'
-  printf 'threads = 16\n'
-  printf 'threads-batch = 16\n'
-  printf 'cache-type-k = f16\n'
-  printf 'cache-type-v = f16\n'
-  printf 'ctx-checkpoints = 32\n'
-  printf 'cache-reuse = 256\n'
-  printf 'cache-ram = 65536\n'
-  printf 'temp = 0.6\n'
-  printf 'top-p = 0.95\n'
-  printf 'top-k = 20\n'
-  printf 'min-p = 0.0\n'
+  local moe="${7:-0}"
+  emit_rocmfpx_section "$@"
   printf 'spec-type = draft-mtp\n'
-  printf 'spec-draft-device = %s\n' "$ROCMFPX_DEVICE"
+  printf 'spec-draft-device = %s\n' "$LLAMA_DEVICE"
   printf 'spec-draft-ngl = all\n'
   printf 'spec-draft-type-k = f16\n'
   printf 'spec-draft-type-v = f16\n'
-  printf 'spec-draft-n-max = 5\n'
+  if (( moe )); then
+    printf 'spec-draft-n-max = 2\n'
+  else
+    printf 'spec-draft-n-max = 5\n'
+  fi
   printf 'spec-draft-n-min = 0\n'
   printf 'spec-draft-p-min = 0.0\n'
   printf 'spec-draft-p-split = 0.10\n'
-  printf 'metrics = true\n'
-  printf 'mmap = off\n'
-  if [[ -n "$mmproj_path" ]]; then
-    printf 'image-min-tokens = 1024\n'
-  fi
 }
 
 emit_rocmfpx_mtp_variants() {
@@ -686,9 +629,10 @@ emit_rocmfpx_mtp_variants() {
   local non_reasoning_alias="$4"
   local mmproj_path="$5"
   local thinking="${6:-on}"
+  local moe="${7:-0}"
 
-  emit_rocmfpx_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
-  emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+  emit_rocmfpx_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking" "$moe"
+  emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking" "$moe"
 }
 
 emit_non_reasoning_section() {
@@ -696,8 +640,9 @@ emit_non_reasoning_section() {
   local model_path="$2"
   local mmproj_path="$3"
   local mtp="$4"
+  local moe="${5:-0}"
 
-  emit_model_section "$id:non-reasoning" "$model_path" "$mmproj_path" "$mtp"
+  emit_model_section "$id:non-reasoning" "$model_path" "$mmproj_path" "$mtp" "$moe"
   printf 'reasoning = off\n'
   printf 'temp = 0.7\n'
   printf 'top-p = 0.8\n'
@@ -710,10 +655,11 @@ emit_model_variants() {
   local mmproj_path="$3"
   local mtp="$4"
   local qwen="$5"
+  local moe="${6:-0}"
 
-  emit_model_section "$id" "$model_path" "$mmproj_path" "$mtp"
+  emit_model_section "$id" "$model_path" "$mmproj_path" "$mtp" "$moe"
   if (( WITH_NON_REASONING )) && (( qwen )); then
-    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp"
+    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp" "$moe"
   fi
 }
 
@@ -772,9 +718,13 @@ while IFS= read -r host_file; do
   if is_qwen_model "$rel"; then
     qwen=1
   fi
+  moe=0
+  if is_moe_model "$rel"; then
+    moe=1
+  fi
 
   if is_crown_halo_mtp_dynamic_model "$rel"; then
-    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" "$rel" >> "$tmp_output"
+    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" "$rel" "$moe" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
   fi
@@ -797,7 +747,7 @@ while IFS= read -r host_file; do
     non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" non-reasoning)" "$rel")"
     seen_aliases[$non_reasoning_alias]=1
     if is_mtp_model "$rel"; then
-      emit_rocmfpx_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
+      emit_rocmfpx_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" "$moe" >> "$tmp_output"
     else
       emit_rocmfpx_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
     fi
@@ -809,7 +759,7 @@ while IFS= read -r host_file; do
         vision_non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" vision non-reasoning)" "$rel")"
         seen_aliases[$vision_non_reasoning_alias]=1
         if is_mtp_model "$rel"; then
-          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" "$moe" >> "$tmp_output"
         else
           emit_rocmfpx_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
         fi
@@ -819,18 +769,18 @@ while IFS= read -r host_file; do
     continue
   fi
 
-  emit_model_variants "$id" "$model_path" "" 0 "$qwen" >> "$tmp_output"
+  emit_model_variants "$id" "$model_path" "" 0 "$qwen" "$moe" >> "$tmp_output"
   if (( mtp )); then
-    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" >> "$tmp_output"
+    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" "$moe" >> "$tmp_output"
   fi
 
   if (( WITH_VISION )); then
     mmproj_path="$(find_mmproj "$host_file" "$rel")"
     if [[ -n "$mmproj_path" ]]; then
       vision_id="$id:vision"
-      emit_model_variants "$vision_id" "$model_path" "$mmproj_path" 0 "$qwen" >> "$tmp_output"
+      emit_model_variants "$vision_id" "$model_path" "$mmproj_path" 0 "$qwen" "$moe" >> "$tmp_output"
       if (( mtp )); then
-        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" >> "$tmp_output"
+        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" "$moe" >> "$tmp_output"
       fi
     fi
   fi

@@ -152,20 +152,23 @@ and the model author last, for example
 `Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`, or
 `Qwopus3.6-27B [MTP] [Q6_0] (Jackrong)`. Non-reasoning and
 vision routes add their route tags before the author.
-FPX routes keep the author profile in the model section:
-262144 context, backend-specific device selection (`Vulkan0` for Vulkan fork
-images, `ROCm0` for ROCm fork images), `b2048/u256`, f16 main and draft KV,
-`draft-mtp` depth 5, 32 context checkpoints, `cache-reuse = 256`,
-`cache-ram = 65536`, DeepSeek reasoning format for the reasoning-on route,
-metrics, and `mmap` off. MTP-capable routes add `draft-mtp` depth 5 with f16
-draft KV. The fork rejects `checkpoint-min-step` inside model preset sections,
+FPX routes share the global `[*]` defaults (262144 context, `threads = 16`,
+`b2048`, f16 main KV, `cache-reuse = 256`, 32 context checkpoints,
+`cache-ram = 65536`, `metrics` on, `mmap` off, and the base
+`chat-template-kwargs = {"preserve_thinking": true}`) and only override what
+differs in the model section: DeepSeek reasoning format for the reasoning-on
+route. `bin/run.sh` pins every route to a single device via `--device`
+(`Vulkan0` for vulkan backends, `ROCm0` for ROCm); ROCm device sections emit
+`u256` (the ROCm microbatch limit), while Vulkan inherits `1024` from `[*]`.
+MTP-capable routes add `draft-mtp` depth 5 with f16 draft KV (MoE models use
+depth 2). The fork rejects `checkpoint-min-step` inside model preset sections,
 so generated ROCmFPX presets omit it even though some model cards show
 `-cpent 256` in direct command examples. Existing ROCmFP4-named model configs
 remain accepted by the ROCmFPX generator and use this same profile. When
 `--with-vision` is used and a same-directory `mmproj-F32.gguf` exists, the
 generated vision routes add `mmproj` and `image-min-tokens = 1024`.
 `Qwopus3.6-27B-Coder-MTP-ROCmFP4-GGUF` keeps those runtime flags but follows
-its model card's agentic-use guidance by adding
+its model card's agentic-use guidance by overriding the global kwargs with
 `chat-template-kwargs = {"enable_thinking": false, "preserve_thinking": true}`
 with DeepSeek reasoning formatting.
 `Nex-N2-mini-ROCmFP4-GGUF` is not an MTP model. Its generated ROCmFPX route
@@ -177,7 +180,7 @@ MTP profile. The generator always emits exactly two routes for it, regardless
 of `--with-non-reasoning`: `:mtp` with reasoning enabled and
 `:mtp:non-reasoning` with reasoning disabled. Both routes keep the model-card
 profile in the model section itself: 131072 context, row split, `f16/f16` main
-and draft KV, `draft-mtp` depth 4, single-slot serving, Strix polling, and
+and draft KV, `draft-mtp` depth 2, single-slot serving, Strix polling, and
 `b2048/u512`. The routes use generated display aliases, for example
 `Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)` and
 `Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] [non-reasoning] (jcbtc)`,
@@ -260,7 +263,7 @@ For the ROCmFPX custom backends, use `--rocmfpx-only` directly, or let
 `bin/run.sh` add it for the `*-fpx` backends:
 
 ```bash
-bin/generate-models-preset.sh --rocmfpx-only --rocmfpx-device ROCm0 \
+bin/generate-models-preset.sh --rocmfpx-only --device ROCm0 \
   "$MODELS_DIR" /root/models models-template.ini /tmp/llama-models-rocmfpx.ini
 ```
 
