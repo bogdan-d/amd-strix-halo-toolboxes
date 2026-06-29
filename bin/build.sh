@@ -129,7 +129,7 @@ for target in "$@"; do
       TARGETS+=("$target")
       ;;
     rocm=7.2.3|rocm:7.2.3|rocm-7.2.3)
-      echo "ROCm 7.2.3 tags were dropped from the next workflow; use rocm or rocm-7.2.4." >&2
+      echo "ROCm 7.2.3 tags are not supported; use rocm or rocm-7.2.4." >&2
       exit 1
       ;;
     rocm=*|rocm:*)

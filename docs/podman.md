@@ -1,10 +1,11 @@
-# Podman without Toolbx or Distrobox
+# Podman Runtime
 
-You can run the published images directly with Podman. This avoids creating Toolbx/Distrobox containers while keeping the same ROCm and Vulkan runtime images.
+Run the images directly with Podman through `bin/run.sh`, which mounts the ROCm
+and Vulkan runtime images with the correct devices and the Strix Halo defaults.
 
 ## Backends
 
-The helper script supports the local next-workflow images:
+The helper script supports the local images:
 
 | Backend | Image | GPU devices |
 | :--- | :--- | :--- |
@@ -316,7 +317,7 @@ bin/run.sh rocm server \
 
 ## Local Builds
 
-Use `bin/build.sh` to build next-workflow images from `containers/Containerfile`.
+Use `bin/build.sh` to build images from `containers/Containerfile`.
 See [build.md](build.md) for build targets and smoke tests.
 
 Start `llama-server` with draft MTP enabled:

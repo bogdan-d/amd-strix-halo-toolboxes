@@ -1,13 +1,13 @@
-# Building Next-Workflow Images
+# Building Images
 
-Build from the repository root. The next workflow uses
+Build from the repository root. Images use
 `containers/Containerfile` for stock ROCm/Vulkan images and
 `containers/Containerfile.rocmfpx` for the ROCmFPX fork on Vulkan, stable ROCm,
 and ROCm nightlies.
 
 ## Quick Start
 
-Build all next-workflow images:
+Build all images:
 
 ```bash
 bin/build.sh
@@ -191,7 +191,7 @@ Local builds use Buildah's normal layer cache. To push and pull cache through a
 real registry in CI, set `BUILD_CACHE_REPO`:
 
 ```bash
-BUILD_CACHE_REPO=ghcr.io/owner/amd-strix-halo-toolboxes-build-cache bin/build.sh all
+BUILD_CACHE_REPO=ghcr.io/owner/strix-llama-build-cache bin/build.sh all
 ```
 
 Disable the extra version/nightly alias tags:
@@ -277,8 +277,8 @@ buildah bud --pull --format oci --layers \
 The Containerfiles use Buildah cache mounts for DNF packages, ROCm nightly
 tarballs, and llama.cpp checkouts. Stock and ROCmFPX builds use separate
 llama.cpp source caches so the fork branch does not churn the stock worktree.
-They build only the runtime targets used by the next workflow: `llama-server`,
-`llama-cli`, `llama-bench`, `llama-gguf-split`, and `llama-quantize`. They also copy the shared
+They build only the runtime targets: `llama-server`,
+`llama-cli`, `llama-bench`, `llama-gguf-split`, and `llama-quantize`. They also copy the
 grammar patch from `patches/` and the VRAM estimator from `scripts/`. Each build resets the cached
 llama.cpp worktree before switching refs and applying local patches, so dirty
 source files left by one backend do not break the next backend build.

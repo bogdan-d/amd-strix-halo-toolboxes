@@ -1,6 +1,6 @@
-# ROCmFPX llama.cpp fork image for the next raw Podman/Docker workflow.
+# ROCmFPX llama.cpp fork runtime image for Strix Halo.
 #
-# Build from the repository root so this file can copy shared legacy assets:
+# Build from the repository root so this file can copy shared build assets:
 #   bin/build.sh vulkan-fpx
 #   bin/build.sh rocm-fpx
 #   bin/build.sh rocm-next-fpx
@@ -416,7 +416,7 @@ COPY --from=builder /opt/rocm-runtime/ /opt/rocm/
 COPY --from=builder /usr/local/ /usr/local/
 
 # Keep ROCm discoverable through ldconfig, not process-wide HIP/ROCm
-# environment variables. The stable upstream toolbox image does not export
+# environment variables. The stable image does not export
 # those variables, and setting them globally can crash stable ROCm during model
 # load on Strix Halo.
 RUN echo "/usr/local/lib"  > /etc/ld.so.conf.d/local.conf \

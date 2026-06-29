@@ -1,11 +1,11 @@
 # llama.cpp Target Reference
 
 This is a local decision aid for choosing which `llama.cpp` binaries to build
-into the next-workflow images. It is based on the `llama*` tools observed in the
+into the images. It is based on the `llama*` tools observed in the
 locally built `rocm`, `rocm-next`, and `vulkan` images before narrowing the
 build targets.
 
-The current stock and ROCmFPX next-workflow images build:
+The current stock and ROCmFPX images build:
 
 - `llama-server`
 - `llama-cli`
@@ -82,7 +82,7 @@ The ROCmFPX images also build the maintainer fork's validation tools:
 
 | Target | Purpose | Local status |
 | :--- | :--- | :--- |
-| `llama` | Upstream command dispatcher/wrapper. | Not built. The next workflow calls concrete binaries directly. |
+| `llama` | Upstream command dispatcher/wrapper. | Not built. The runtime calls concrete binaries directly. |
 | `llama-debug` | General debug utility. | Not built. |
 | `llama-debug-template-parser` | Chat-template parser debug utility. | Not built. |
 | `llama-template-analysis` | Chat-template analysis tool. | Not built. |
@@ -101,5 +101,5 @@ Good first additions if the workflow expands:
 - Add `llama-gguf` and `llama-gguf-hash` for local model inspection.
 - Add `llama-imatrix` if importance-matrix generation should happen inside
   these runtime images.
-- Add `rpc-server` only if distributed inference returns to the next workflow;
+- Add `rpc-server` only if distributed inference is reintroduced;
   that also requires re-enabling `GGML_RPC`.

@@ -3,7 +3,7 @@
 This document records the local reading of the `charlie12345/ROCmFPX` fork used
 by the `vulkan-fpx`, `rocm-fpx`, and `rocm-next-fpx` images.
 
-Primary upstream files inspected:
+Primary source files inspected:
 
 - <https://github.com/charlie12345/ROCmFPX/blob/main/README.md>
 - <https://github.com/charlie12345/ROCmFPX/blob/main/ggml/rocmfpx/README.md>
@@ -39,7 +39,7 @@ Common design constraints:
 
 ## Build Targets In This Repo
 
-The next workflow builds ROCmFPX through `containers/Containerfile.rocmfpx`:
+ROCmFPX builds through `containers/Containerfile.rocmfpx`:
 
 | Local backend | Image tag | Runtime backend |
 | --- | --- | --- |
