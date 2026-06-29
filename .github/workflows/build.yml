@@ -30,11 +30,12 @@ jobs:
       matrix_json: ${{ steps.mk.outputs.matrix_json }}
     steps:
       - id: mk
+        env:
+          INPUT_BACKENDS: ${{ inputs.backends }}
         shell: bash
         run: |
           set -euo pipefail
-          IN='${{ inputs.backends }}'
-          IN="${IN:-all}"
+          IN="${INPUT_BACKENDS:-all}"
           # Normalize commas / whitespace to single spaces.
           IN_CLEAN="$(printf '%s' "$IN" | tr ',[:space:]' '  ' | xargs)"
           if [[ "$IN_CLEAN" == "all" ]]; then
