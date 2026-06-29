@@ -28,9 +28,13 @@ from urllib.error import URLError
 
 # ── Toolbox definitions ──────────────────────────────────────────────────────
 
+# Image prefix mirrors bin/build.sh and bin/run.sh. Override with the IMAGE_PREFIX
+# environment variable to target published images (e.g. ghcr.io/owner/strix-llama).
+IMAGE_PREFIX = os.environ.get("IMAGE_PREFIX", "localhost/strix-llama")
+
 TOOLBOXES = {
     "rocm-7.2.4": {
-        "image": "docker.io/kyuz0/amd-strix-halo-toolboxes:rocm-7.2.4",
+        "image": f"{IMAGE_PREFIX}:rocm-7.2.4",
         "engine_args": [
             "--device", "/dev/dri",
             "--device", "/dev/kfd",
@@ -40,7 +44,7 @@ TOOLBOXES = {
         ],
     },
     "vulkan-radv": {
-        "image": "docker.io/kyuz0/amd-strix-halo-toolboxes:vulkan-radv",
+        "image": f"{IMAGE_PREFIX}:vulkan",
         "engine_args": [
             "--device", "/dev/dri",
             "--group-add", "video",
