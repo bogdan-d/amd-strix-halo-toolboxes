@@ -200,6 +200,18 @@ Disable the extra version/nightly alias tags:
 TAG_VERSION=0 TAG_NIGHTLY_ALIAS=0 bin/build.sh all
 ```
 
+## Continuous Integration
+
+`.github/workflows/build.yml` drives `bin/build.sh` with `BUILDER=buildah` on an
+`ubuntu-latest` runner, builds only compile for `gfx1151` (no AMD GPU is needed
+at build time), smokes each image with `llama-server --version`, and pushes all
+tags to `ghcr.io/<owner>/strix-llama`. Trigger it manually with a `backends`
+input, or let `.github/workflows/poll-llama-cpp.yml` dispatch it automatically
+when the llama.cpp default branch advances.
+
+The CI sets `IMAGE_PREFIX` and `BUILD_CACHE_REPO` to GHCR, so the same
+`bin/build.sh` cache mechanism works locally and in CI.
+
 ## Manual Build
 
 The script expands to commands like this:

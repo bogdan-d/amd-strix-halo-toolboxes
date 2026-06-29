@@ -1,0 +1,108 @@
+name: Build Strix Halo Images
+
+# Builds llama.cpp container images with bin/build.sh (Buildah) and pushes them
+# to GHCR. Triggered manually, or by the llama.cpp poller via workflow_dispatch.
+# Builds only compile for gfx1151 — no AMD GPU is needed at build time.
+
+on:
+  workflow_dispatch:
+    inputs:
+      backends:
+        description: >-
+          Space- or comma-separated build targets
+          (rocm rocm-next vulkan vulkan-fpx rocm-fpx rocm-next-fpx), or "all".
+        required: false
+        default: all
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  BUILDER: buildah
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/strix-llama
+  BUILD_CACHE_REPO: ghcr.io/${{ github.repository_owner }}/strix-llama-build-cache
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix_json: ${{ steps.mk.outputs.matrix_json }}
+    steps:
+      - id: mk
+        shell: bash
+        run: |
+          set -euo pipefail
+          IN='${{ inputs.backends }}'
+          IN="${IN:-all}"
+          # Normalize commas / whitespace to single spaces.
+          IN_CLEAN="$(printf '%s' "$IN" | tr ',[:space:]' '  ' | xargs)"
+          if [[ "$IN_CLEAN" == "all" ]]; then
+            IN_CLEAN="rocm rocm-next vulkan"
+          fi
+          KNOWN="rocm rocm-next vulkan vulkan-fpx rocm-fpx rocm-next-fpx"
+          JSON="["
+          first=1
+          for b in $IN_CLEAN; do
+            if ! grep -qw "$b" <<<"$KNOWN"; then
+              echo "::error::Unknown backend '$b'. Known targets: $KNOWN" >&2
+              exit 1
+            fi
+            [[ $first -eq 0 ]] && JSON+=","
+            JSON+="\"$b\""
+            first=0
+          done
+          JSON+="]"
+          echo "matrix_json=$JSON" >> "$GITHUB_OUTPUT"
+          echo "Resolved matrix: $JSON"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: ${{ fromJson(needs.prepare.outputs.matrix_json) }}
+    steps:
+      - name: Free up runner disk space
+        run: |
+          echo "before:"; df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo apt-get purge -y 'ghc-*' || true
+          sudo docker system prune --all --force >/dev/null 2>&1 || true
+          echo "after:"; df -h /
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Buildah
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y buildah
+          buildah version
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | buildah login ghcr.io \
+            --username "${{ github.actor }}" --password-stdin
+
+      - name: Build ${{ matrix.backend }}
+        run: |
+          set -euo pipefail
+          bin/build.sh "${{ matrix.backend }}"
+
+      - name: Smoke test (${{ matrix.backend }})
+        run: |
+          set -euo pipefail
+          # --version does not initialize the GPU, so it is safe on a CPU runner.
+          podman run --rm "${IMAGE_PREFIX}:${{ matrix.backend }}" llama-server --version
+
+      - name: Push image tags
+        run: |
+          set -euo pipefail
+          podman images --filter reference="${IMAGE_PREFIX}" \
+            --format '{{.Repository}}:{{.Tag}}' \
+            | sort -u | while read -r img; do
+              echo "-> pushing $img"
+              podman push "$img"
+            done
