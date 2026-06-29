@@ -1,29 +1,71 @@
-# Current Agent Instructions
+# Agent Instructions
 
-Use `AGENTS.override.md` first. It describes the active next-workflow direction for this repo. Everything below this section is legacy upstream context and should be treated as historical guidance unless `AGENTS.override.md` says to work in the legacy paths.
+Guidance for coding agents working in this repo.
 
-# AI Agent Context: AMD Strix Halo Llama.cpp Toolboxes
+## Goal
 
-**Primary Goal:** This project provides pre-built containers ("toolboxes") for running `llama.cpp` optimally on AMD Ryzen AI Max "Strix Halo" APUs. It simplifies environment setup for ROCm and Vulkan backends, allowing users to leverage up to 124 GiB of unified system memory for LLM inference.
+Build and run [llama.cpp] optimally on **AMD Ryzen AI Max "Strix Halo"** (gfx1151)
+integrated GPUs, using plain Podman/Docker-compatible containers that expose the
+APU's unified memory (up to 124 GiB usable as GPU memory) across ROCm and Vulkan
+backends. Optimize for reproducible image builds and Strix Halo runtime defaults
+that reflect measured local behavior.
 
-## Core Technologies
-*   **Containerization**: [Toolbx](https://containertoolbx.org/) (Fedora) or Distrobox (Ubuntu). Underneath, Docker/Podman is used to build base images.
-*   **Inference Engine**: [Llama.cpp](https://github.com/ggerganov/llama.cpp)
-*   **Hardware / Drivers**: AMD "Strix Halo" APUs (Gfx1151). Implementations depend on ROCm (v6.4.4, v7.x) and Vulkan (Mesa RADV, AMDVLK).
+## Repository layout
 
-## Repository Structure Overview
-*   `/toolboxes/`: Dockerfiles used to build the container images (e.g., `rocm-6.4.4`, `rocm-7.2.4`, `vulkan-radv`). These often use multi-stage builds to compile Llama.cpp and extract standalone binaries.
-*   `/benchmark/`: Shell scripts and Python utilities (like `generate_results_json.py`) to systematically test Llama.cpp throughput, latency, and RPC performance.
-*   `/docs/`: Markdown documents, along with HTML/CSS/JS (e.g., `index.html`, `assets/`) for the GitHub Pages website (`strix-halo-toolboxes.com`), plus interactive benchmark viewers and documentation on VRAM estimation.
-*   `/scripts/`: Python utilities, including `run_distributed_llama.py` for distributed inference across nodes.
-*   `.github/workflows/`: GitHub Actions that automatically rebuild containers whenever the upstream `llama.cpp` master branch updates or when triggered manually.
+- `containers/` — `Containerfile` (stock backends) and `Containerfile.rocmfpx`
+  (ROCmFPX fork backends), plus `rocmfpx-warning.patch`.
+- `bin/` — host-side helpers: `build.sh` (Buildah image builds), `run.sh`
+  (Podman runtime wrapper), and preset/config generators.
+- `patches/` — shared build assets copied into images (`llama-grammar.patch`).
+- `scripts/` — host utilities copied into images
+  (`gguf-vram-estimator.py`) and benchmark helpers.
+- `docs/` — all user and contributor documentation.
+- `benchmark/` — throughput/latency/MTP benchmark runner scripts.
+- `.github/workflows/` — CI: image builds (`build.yml`) and the llama.cpp poller.
 
-## Critical Technical Quirks (Important for Development)
-*   **Flash Attention & no-mmap**: Running `llama-server` or `llama-cli` on Strix Halo *requires* `-fa 1` (flash attention) and `--no-mmap` to avoid memory fragmentation and crashes.
-*   **Kernel memory params**: The optimal Strix Halo host configuration relies on custom boot parameters (`iommu=pt amdgpu.gttsize=126976 ttm.pages_limit=32505856`) to allocate unified RAM to the iGPU.
-*   **Kernel Bugs**: Avoid kernels older than 6.18.4, and the specifically broken `linux-firmware-20251125`.
+## Critical technical quirks
 
-## General Instructions for Coding Agents
-1.  **Container Builds**: When modifying `Dockerfile.*` files inside `/toolboxes`, ensure the build output remains lean and only necessary runtime dependencies and Llama.cpp binaries are carried over.
-2.  **Documentation Synchronization**: If adding a new backend or feature, ensure `README.md` is updated simultaneously.
-3.  **Scripts**: Benchmarking and utility scripts are expected to integrate with standard `toolbox` execution. Use `/dev/dri` and `/dev/kfd` mounts for device access.
+- **Flash attention & no-mmap**: every `llama-server` / `llama-cli` run on Strix
+  Halo *requires* `-fa 1` and `--no-mmap` to avoid memory fragmentation and
+  crashes. `bin/run.sh` applies these defaults; raw `podman run` callers must set
+  them explicitly.
+- **Kernel memory params**: the host needs
+  `amd_iommu=off amdgpu.gttsize=126976 ttm.pages_limit=32505856` to allocate
+  unified RAM to the iGPU. See `docs/hardware.md`.
+- **Kernel/firmware bugs**: avoid kernels older than 6.18.4 and the broken
+  `linux-firmware-20251125` package.
+
+## Build & runtime notes
+
+- `bin/build.sh` defaults to **buildah** (set `BUILDER=podman` for Podman). It is
+  not compatible with plain `docker build` because the Containerfiles use Buildah
+  cache mounts (`--mount=type=cache`).
+- The Containerfiles `COPY` shared assets from `patches/` and `scripts/` (repo
+  root is the build context). Keep these paths consistent when moving assets.
+- Runtime images mount `/dev/dri` and `/dev/kfd` for GPU access; `bin/run.sh`
+  handles this.
+
+## Documentation rule
+
+When implementing or updating meaningful behavior, update the matching docs in
+the same change:
+
+- `README.md` — when the entry-point workflow, supported backend list, or
+  first-run command path changes.
+- `docs/overview.md` — when repo layout, build/runtime data flow, or the
+  container target table changes.
+- `docs/build.md` — when build targets, tags, build arguments, cache behavior,
+  log behavior, or smoke tests change.
+- `docs/podman.md` — when runtime helper commands, backend aliases, mounted
+  paths, ports, environment variables, Strix Halo defaults, or raw Podman
+  examples change.
+- `docs/llama-cpp-args.md` — when this repo's llama.cpp argument defaults or
+  decision guidance changes.
+- `docs/hardware.md` — when host configuration, kernel/firmware guidance, or
+  VRAM planning changes.
+
+Small fixes do not require doc churn unless they prevent repeatedly hitting the
+same mistake. If a fix captures a non-obvious local lesson, document that lesson
+near the workflow it affects.
+
+[llama.cpp]: https://github.com/ggml-org/llama.cpp
