@@ -81,13 +81,15 @@ overrides what differs: `reasoning-format = deepseek` for reasoning-on routes.
 Only models identified as MTP-capable get `:mtp` route IDs,
 `[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
 `spec-draft-type-k/v = f16`, `spec-draft-n-max = 5` (MoE models override to 2),
-and `spec-draft-p-split = 0.10`. The fork rejects `checkpoint-min-step` in model
+and `spec-draft-p-split = 0.10`; those files also keep non-speculative base
+routes without the `:mtp` suffix. The fork rejects `checkpoint-min-step` in model
 preset sections, so generated ROCmFPX presets omit that direct-command
-`-cpent` setting. The generator emits display aliases for each known
-compatible ROCmFPX model using model name and size, bracketed
-capabilities/quantization/route tags, and the model author in parentheses,
-for example `Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)` or
-`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`.
+`-cpent` setting. The generator emits display aliases with the shared
+`[author] model-name [weights / active-weights] [quant] [route/features] [disk-size]`
+pattern, for example
+`[bartowski] allura-org_Qwen3.6-Anko [35B / A3B] [Q6_K_L] [VISION] [29G]`
+or
+`[plunderstruck] Qwen3.6-STRIX-embF16-imatrix-headQ6 [27B] [MTP] [UNC] [FP4] [16G]`.
 `--with-vision` adds `mmproj` plus `image-min-tokens = 1024` for paired
 Plunderstruck projectors. Qwopus3.6 Coder
 keeps the same runtime profile but adds the model-card thinking-off kwargs

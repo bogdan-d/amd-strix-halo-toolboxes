@@ -94,7 +94,7 @@ model paths available for one-off runs.
 Defaults encoded by the helper:
 
 - `models-template.ini` as the tracked source for generated `--models-preset`
-  files; provider-qualified model IDs derived from `author/repo:quant` paths;
+  files; provider-qualified model IDs derived from `author/model-file-stem`;
 - Qwen3.6 preset defaults: `ctx-size = 262144` total server context pool,
   `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV, context
   checkpoints (`cache-ram = 32768`), `image-min-tokens = 1024`, coding-agent

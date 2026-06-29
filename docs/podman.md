@@ -84,8 +84,8 @@ that active preset to a temporary file, mounts it read-only into the container a
 does not write `models.ini` into the mounted model directory.
 
 Discovery exposes every non-`mmproj` `*.gguf` file. Generated names use
-`author/repo:quant` when the mounted path has that shape, for example
-`unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL`. A single same-directory
+`author/model-file-stem` when the mounted path has that shape, for example
+`unsloth/Qwen3.6-27B-MTP-UD-Q4_K_XL`. A single same-directory
 `mmproj*.gguf` is paired automatically; multiple projectors are ignored with a
 warning. Paths or filenames containing `MTP` or `mtp` get the local MTP
 speculation settings. Qwen-derived models also get a `:non-reasoning` variant.
@@ -142,16 +142,18 @@ For those backends, `bin/run.sh` automatically generates an FPX-only preset.
 For the ROCm FPX backends it also sets
 `HSA_OVERRIDE_GFX_VERSION=11.5.1` plus `GGML_HIP_ENABLE_UNIFIED_MEMORY=1`.
 Normal generated presets skip ROCmFPX-compatible GGUFs so stock images do not
-expose routes that cannot load. The fork profile emits reasoning-enabled and
-non-reasoning routes per compatible model.
+expose routes that cannot load. The fork profile emits reasoning-enabled routes
+per compatible model; pass `--with-non-reasoning` to add matching
+non-reasoning routes.
 Only models identified as MTP-capable get `:mtp` route IDs, `[MTP]` aliases,
-and `draft-mtp` flags. Generated aliases follow the normal display-name
-pattern: model name and size first, bracketed capabilities/quantization next,
-and the model author last, for example
-`Qwopus3.6-27B-v2 [MTP] [Q4_0] (Jackrong)`,
-`Qwen3.6-27B [UNC] [ROCmFP4] [imatrix] (plunderstruck)`, or
-`Qwopus3.6-27B [MTP] [Q6_0] (Jackrong)`. Non-reasoning and
-vision routes add their route tags before the author.
+and `draft-mtp` flags; MTP-capable files also keep non-speculative base routes.
+Generated IDs use `author/model-file-stem`, plus route suffixes such as `:mtp`,
+`:vision`, and `:non-reasoning`. Generated aliases use one display pattern:
+`[author] model-name [weights / active-weights] [quant] [route/features] [disk-size]`,
+for example
+`[bartowski] allura-org_Qwen3.6-Anko [35B / A3B] [Q6_K_L] [VISION] [29G]`
+or
+`[plunderstruck] Qwen3.6-STRIX-embF16-imatrix-headQ6 [27B] [MTP] [UNC] [FP4] [16G]`.
 FPX routes share the global `[*]` defaults (262144 context, `threads = 16`,
 `b2048`, f16 main KV, `cache-reuse = 256`, 32 context checkpoints,
 `cache-ram = 65536`, `metrics` on, `mmap` off, and the base
@@ -286,9 +288,10 @@ OpenCode it prefers `~/.config/opencode/opencode.jsonc`, then falls back to
 `~/.config/opencode/opencode.json`. Use `--base-home <dir>` to test against a
 temporary home-shaped directory without touching real user configs.
 
-It reads model IDs and inherited `ctx-size` / `parallel` values from the
-llama.cpp preset, prefers a section's `alias` as the client-facing model ID
-when present, then reports the per-slot context as
+It reads model IDs, display aliases, and inherited `ctx-size` / `parallel`
+values from the llama.cpp preset. Coding-tool config IDs stay equal to the
+preset section names; a section's `alias`, when present, is used only as the
+display name. The generator then reports the per-slot context as
 `floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
 suffix advertise image input; other sections stay text-only. `reasoning = off`
 sections are emitted as non-thinking/non-reasoning models, and explicit `:mtp`
@@ -461,6 +464,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. Generated presets omit Qwen `:non-reasoning` variants and mmproj-backed `:vision` variants unless `bin/run.sh` is called with `--with-non-reasoning` or `--with-vision`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. Generated presets omit stock Qwen `:non-reasoning` variants, ROCmFPX `:non-reasoning` variants, and mmproj-backed `:vision` variants unless `bin/run.sh` is called with `--with-non-reasoning` or `--with-vision`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
 The preset passed to `server` and the model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

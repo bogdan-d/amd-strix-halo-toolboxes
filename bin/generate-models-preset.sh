@@ -102,32 +102,13 @@ filename_stem() {
   printf '%s\n' "${name%.gguf}"
 }
 
-infer_quant() {
-  local rel="$1"
-  local stem
-  stem="$(filename_stem "$rel")"
-
-  if [[ "$stem" =~ (UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?)(-mtp)?$ ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
-    return 0
-  fi
-
-  printf '%s\n' "$stem"
-}
-
 model_id_base() {
   local rel="$1"
-  local quant="$2"
   local first second rest
 
   IFS=/ read -r first second rest <<< "$rel"
-  if [[ -n "${first:-}" && -n "${second:-}" && -n "${rest:-}" ]]; then
-    printf '%s/%s:%s\n' "$first" "$second" "$quant"
-    return 0
-  fi
-
   if [[ -n "${first:-}" && -n "${second:-}" ]]; then
-    printf '%s:%s\n' "$first" "$quant"
+    printf '%s/%s\n' "$first" "$(filename_stem "$rel")"
     return 0
   fi
 
@@ -254,6 +235,121 @@ is_moe_model() {
 is_imatrix_model() {
   local rel="$1"
   [[ "$rel" =~ (^|[-_/])[Ii][Mm][Aa][Tt][Rr][Ii][Xx]($|[-_/]) ]]
+}
+
+model_size_label() {
+  local host_file="$1"
+
+  du -BG --apparent-size "$host_file" | cut -f1
+}
+
+clean_alias_model_name() {
+  local value="$1"
+
+  value="$(printf '%s\n' "$value" | sed -E \
+    -e 's/[-_][Gg][Gg][Uu][Ff]$//' \
+    -e 's/-+/-/g' \
+    -e 's/_+/_/g' \
+    -e 's/-_+/-/g' \
+    -e 's/_-+/_/g' \
+    -e 's/^[-_]+//' \
+    -e 's/[-_]+$//')"
+  if [[ -z "$value" ]]; then
+    value=model
+  fi
+  printf '%s\n' "$value"
+}
+
+alias_remove_token() {
+  local value="$1"
+  local token_re="$2"
+
+  printf '%s\n' "$value" | sed -E \
+    -e "s/(^|[-_])${token_re}($|[-_])/-/Ig" \
+    -e 's/-+/-/g' \
+    -e 's/_+/_/g' \
+    -e 's/-_+/-/g' \
+    -e 's/_-+/_/g' \
+    -e 's/^[-_]+//' \
+    -e 's/[-_]+$//'
+}
+
+generic_alias_parts() {
+  local host_file="$1"
+  local rel="$2"
+  local mtp_enabled="$3"
+  local non_reasoning="$4"
+  local vision_enabled="$5"
+  local stem model_name author quant="" weight="" active="" fpx="" fpx_char="" size_on_disk
+
+  stem="$(filename_stem "$rel")"
+  model_name="$stem"
+  author="$(model_author "$rel")"
+
+  # Strip feature and size tokens first. Remaining cleaned stem is display name.
+  if [[ "$model_name" =~ [Rr][Oo][Cc][Mm][Ff][Pp]([Xx0-9]) ]]; then
+    fpx_char="${BASH_REMATCH[1]}"
+    if [[ "$fpx_char" =~ [Xx] ]]; then
+      fpx="FPX"
+    else
+      fpx="FP${fpx_char}"
+    fi
+    model_name="$(alias_remove_token "$model_name" '[Rr][Oo][Cc][Mm][Ff][Pp][Xx0-9]')"
+  fi
+
+  model_name="$(alias_remove_token "$model_name" '([Tt][Hh][Ii][Nn][Kk][Ii][Nn][Gg]|[Rr][Ee][Aa][Ss][Oo][Nn][Ii][Nn][Gg])')"
+
+  if is_uncensored_model "$rel" || [[ "$rel" =~ [Hh][Ee][Rr][Ee][Tt][Ii][Cc] ]]; then
+    model_name="$(alias_remove_token "$model_name" '([Uu][Nn][Cc][Ee][Nn][Ss][Oo][Rr][Ee][Dd]|[Hh][Ee][Rr][Ee][Tt][Ii][Cc]|[AaOo][Bb][Ll][Ii][Tt][Ee][Rr][Aa][Tt][Ee][Dd]|[Uu][Nn][Cc])')"
+  fi
+
+  if is_mtp_model "$rel"; then
+    model_name="$(alias_remove_token "$model_name" '[Mm][Tt][Pp]')"
+  fi
+
+  if [[ "$model_name" =~ (^|[-_])((UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?))($|[-_]) ]]; then
+    quant="${BASH_REMATCH[2]}"
+    model_name="$(alias_remove_token "$model_name" "$quant")"
+  fi
+  model_name="$(alias_remove_token "$model_name" '[Tt][Oo]')"
+
+  if [[ "$model_name" =~ ([0-9]+[BbMm])-[Aa]([0-9]+[BbMm]) ]]; then
+    weight="${BASH_REMATCH[1]}"
+    active="A${BASH_REMATCH[2]}"
+    model_name="$(alias_remove_token "$model_name" "${BASH_REMATCH[1]}-[Aa]${BASH_REMATCH[2]}")"
+  elif [[ "$model_name" =~ (^|[-_])([0-9]+[BbMm])($|[-_]) ]]; then
+    weight="${BASH_REMATCH[2]}"
+    model_name="$(alias_remove_token "$model_name" "$weight")"
+  fi
+
+  model_name="$(clean_alias_model_name "$model_name")"
+  size_on_disk="$(model_size_label "$host_file")"
+
+  printf '[%s] %s' "$author" "$model_name"
+  if [[ -n "$weight" && -n "$active" ]]; then
+    printf ' [%s / %s]' "$weight" "$active"
+  elif [[ -n "$weight" ]]; then
+    printf ' [%s]' "$weight"
+  fi
+  if [[ -n "$quant" ]]; then
+    printf ' [%s]' "$quant"
+  fi
+  if (( mtp_enabled )); then
+    printf ' [MTP]'
+  fi
+  if (( non_reasoning )); then
+    printf ' [NO-THINK]'
+  fi
+  if is_uncensored_model "$rel" || [[ "$rel" =~ [Hh][Ee][Rr][Ee][Tt][Ii][Cc] ]]; then
+    printf ' [UNC]'
+  fi
+  if [[ -n "$fpx" ]]; then
+    printf ' [%s]' "$fpx"
+  fi
+  if (( vision_enabled )); then
+    printf ' [VISION]'
+  fi
+  printf ' [%s]\n' "$size_on_disk"
 }
 
 rocmfpx_alias_quant() {
@@ -601,7 +697,9 @@ emit_rocmfpx_variants() {
   local thinking="${6:-on}"
 
   emit_rocmfpx_section "$id" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
-  emit_rocmfpx_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+  if (( WITH_NON_REASONING )); then
+    emit_rocmfpx_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+  fi
 }
 
 emit_rocmfpx_mtp_section() {
@@ -632,7 +730,9 @@ emit_rocmfpx_mtp_variants() {
   local moe="${7:-0}"
 
   emit_rocmfpx_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking" "$moe"
-  emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking" "$moe"
+  if (( WITH_NON_REASONING )); then
+    emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking" "$moe"
+  fi
 }
 
 emit_non_reasoning_section() {
@@ -641,8 +741,12 @@ emit_non_reasoning_section() {
   local mmproj_path="$3"
   local mtp="$4"
   local moe="${5:-0}"
+  local alias="${6:-}"
 
   emit_model_section "$id:non-reasoning" "$model_path" "$mmproj_path" "$mtp" "$moe"
+  if [[ -n "$alias" ]]; then
+    printf 'alias = %s\n' "$alias"
+  fi
   printf 'reasoning = off\n'
   printf 'temp = 0.7\n'
   printf 'top-p = 0.8\n'
@@ -656,10 +760,15 @@ emit_model_variants() {
   local mtp="$4"
   local qwen="$5"
   local moe="${6:-0}"
+  local alias="${7:-}"
+  local non_reasoning_alias="${8:-}"
 
   emit_model_section "$id" "$model_path" "$mmproj_path" "$mtp" "$moe"
+  if [[ -n "$alias" ]]; then
+    printf 'alias = %s\n' "$alias"
+  fi
   if (( WITH_NON_REASONING )) && (( qwen )); then
-    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp" "$moe"
+    emit_non_reasoning_section "$id" "$model_path" "$mmproj_path" "$mtp" "$moe" "$non_reasoning_alias"
   fi
 }
 
@@ -705,8 +814,7 @@ while IFS= read -r host_file; do
     continue
   fi
 
-  quant="$(infer_quant "$rel")"
-  id="$(unique_model_id "$(model_id_base "$rel" "$quant")" "$rel")"
+  id="$(unique_model_id "$(model_id_base "$rel")" "$rel")"
   seen_ids[$id]=1
 
   model_path="$(container_path "$rel")"
@@ -742,26 +850,44 @@ while IFS= read -r host_file; do
     if is_qwopus_27b_coder_rocmfpx_model "$rel"; then
       thinking=off
     fi
-    reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel")" "$rel")"
+    reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 0)" "$rel")"
     seen_aliases[$reasoning_alias]=1
-    non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" non-reasoning)" "$rel")"
-    seen_aliases[$non_reasoning_alias]=1
+    non_reasoning_alias=""
+    if (( WITH_NON_REASONING )); then
+      non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 1 0)" "$rel")"
+      seen_aliases[$non_reasoning_alias]=1
+    fi
+    emit_rocmfpx_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
     if is_mtp_model "$rel"; then
-      emit_rocmfpx_mtp_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" "$moe" >> "$tmp_output"
-    else
-      emit_rocmfpx_variants "$id" "$model_path" "$reasoning_alias" "$non_reasoning_alias" "" "$thinking" >> "$tmp_output"
+      mtp_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 0)" "$rel")"
+      seen_aliases[$mtp_alias]=1
+      mtp_non_reasoning_alias=""
+      if (( WITH_NON_REASONING )); then
+        mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 0)" "$rel")"
+        seen_aliases[$mtp_non_reasoning_alias]=1
+      fi
+      emit_rocmfpx_mtp_variants "$id" "$model_path" "$mtp_alias" "$mtp_non_reasoning_alias" "" "$thinking" "$moe" >> "$tmp_output"
     fi
     if (( WITH_VISION )); then
       mmproj_path="$(find_mmproj "$host_file" "$rel")"
       if [[ -n "$mmproj_path" ]]; then
-        vision_alias="$(unique_alias "$(rocmfpx_alias "$rel" vision)" "$rel")"
+        vision_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 1)" "$rel")"
         seen_aliases[$vision_alias]=1
-        vision_non_reasoning_alias="$(unique_alias "$(rocmfpx_alias "$rel" vision non-reasoning)" "$rel")"
-        seen_aliases[$vision_non_reasoning_alias]=1
+        vision_non_reasoning_alias=""
+        if (( WITH_NON_REASONING )); then
+          vision_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 1 1)" "$rel")"
+          seen_aliases[$vision_non_reasoning_alias]=1
+        fi
+        emit_rocmfpx_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
         if is_mtp_model "$rel"; then
-          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" "$moe" >> "$tmp_output"
-        else
-          emit_rocmfpx_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+          vision_mtp_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 1)" "$rel")"
+          seen_aliases[$vision_mtp_alias]=1
+          vision_mtp_non_reasoning_alias=""
+          if (( WITH_NON_REASONING )); then
+            vision_mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 1)" "$rel")"
+            seen_aliases[$vision_mtp_non_reasoning_alias]=1
+          fi
+          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" "$mmproj_path" "$thinking" "$moe" >> "$tmp_output"
         fi
       fi
     fi
@@ -769,18 +895,46 @@ while IFS= read -r host_file; do
     continue
   fi
 
-  emit_model_variants "$id" "$model_path" "" 0 "$qwen" "$moe" >> "$tmp_output"
+  alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 0)" "$rel")"
+  seen_aliases[$alias]=1
+  non_reasoning_alias=""
+  if (( WITH_NON_REASONING )) && (( qwen )); then
+    non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 1 0)" "$rel")"
+    seen_aliases[$non_reasoning_alias]=1
+  fi
+  emit_model_variants "$id" "$model_path" "" 0 "$qwen" "$moe" "$alias" "$non_reasoning_alias" >> "$tmp_output"
   if (( mtp )); then
-    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" "$moe" >> "$tmp_output"
+    mtp_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 0)" "$rel")"
+    seen_aliases[$mtp_alias]=1
+    mtp_non_reasoning_alias=""
+    if (( WITH_NON_REASONING )) && (( qwen )); then
+      mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 0)" "$rel")"
+      seen_aliases[$mtp_non_reasoning_alias]=1
+    fi
+    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" "$moe" "$mtp_alias" "$mtp_non_reasoning_alias" >> "$tmp_output"
   fi
 
   if (( WITH_VISION )); then
     mmproj_path="$(find_mmproj "$host_file" "$rel")"
     if [[ -n "$mmproj_path" ]]; then
       vision_id="$id:vision"
-      emit_model_variants "$vision_id" "$model_path" "$mmproj_path" 0 "$qwen" "$moe" >> "$tmp_output"
+      vision_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 1)" "$rel")"
+      seen_aliases[$vision_alias]=1
+      vision_non_reasoning_alias=""
+      if (( WITH_NON_REASONING )) && (( qwen )); then
+        vision_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 1 1)" "$rel")"
+        seen_aliases[$vision_non_reasoning_alias]=1
+      fi
+      emit_model_variants "$vision_id" "$model_path" "$mmproj_path" 0 "$qwen" "$moe" "$vision_alias" "$vision_non_reasoning_alias" >> "$tmp_output"
       if (( mtp )); then
-        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" "$moe" >> "$tmp_output"
+        vision_mtp_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 1)" "$rel")"
+        seen_aliases[$vision_mtp_alias]=1
+        vision_mtp_non_reasoning_alias=""
+        if (( WITH_NON_REASONING )) && (( qwen )); then
+          vision_mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 1)" "$rel")"
+          seen_aliases[$vision_mtp_non_reasoning_alias]=1
+        fi
+        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" "$moe" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" >> "$tmp_output"
       fi
     fi
   fi

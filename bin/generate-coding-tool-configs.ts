@@ -260,96 +260,21 @@ function effectiveMaxOutputTokens(
   return capped;
 }
 
-function displayNameForModel(id: string): string {
-  if (/\[[^\]]+\].*\([^)]+\)$/.test(id)) {
-    return id;
-  }
-
-  const [pathPart, ...suffixes] = id.split(":");
-  const pathParts = pathPart.split("/");
-  const author = pathParts.length > 1 ? pathParts[0] : undefined;
-  const repo = pathParts[pathParts.length - 1] ?? pathPart;
-  const quant = suffixes.find((suffix) => /^(UD-)?(IQ|TQ|Q|BF16|F16|F32|MXFP)/i.test(suffix));
-  const featureSuffixes = suffixes.filter((suffix) => suffix !== quant);
-
-  const normalizedRepo = repo
-    .replace(/-?GGUF$/i, "")
-    .replace(/^Huihui-/i, "")
-    .replace(/-Claude-[0-9.]+-Opus/i, "")
-    .replace(/-abliterated/i, "")
-    .replace(/-UD-/g, "-")
-    .replace(/-Q[0-9]+_[A-Za-z0-9_]+$/i, "");
-  const baseName = normalizedRepo.match(
-    /(?:^|[-_])((?:[A-Z][A-Za-z0-9]*|[a-z][a-z0-9]*)[A-Za-z0-9.]*-[0-9]+(?:\.[0-9]+)?B(?:-[A-Z][0-9]+B)?)/,
-  )?.[1];
-  let name = baseName ?? normalizedRepo;
-
-  const tags = new Set<string>();
-  if (/\bA[0-9]+B\b/i.test(name) || /\bMOE\b/i.test(name)) {
-    tags.add("MOE");
-  }
-  if (featureSuffixes.includes("mtp")) {
-    tags.add("MTP");
-  }
-  if (/huihui|[ao]bliterated|uncensored/i.test(id)) {
-    tags.add("UNC");
-  }
-  if (quant !== undefined) {
-    tags.add(quant);
-  }
-  if (featureSuffixes.includes("vision")) {
-    tags.add("vision");
-  }
-  if (featureSuffixes.includes("non-reasoning")) {
-    tags.add("non-reasoning");
-  }
-
-  name = name.replace(/-+/g, "-").replace(/^-|-$/g, "");
-
-  const tagText = Array.from(tags)
-    .map((tag) => `[${tag}]`)
-    .join(" ");
-  const authorText = author === undefined ? "" : ` (${author})`;
-
-  return `${[name, tagText].filter(Boolean).join(" ")}${authorText}`;
-}
-
-function modelIdForSection(section: IniSection, aliasCounts: Map<string, number>): string {
-  const alias = section.values.alias?.trim();
-  if (alias === undefined || alias === "" || aliasCounts.get(alias) !== 1) {
-    return section.name;
-  }
-
-  return alias;
-}
-
-function countAliases(sections: IniSection[]): Map<string, number> {
-  const counts = new Map<string, number>();
-
-  sections.forEach((section) => {
-    const alias = section.values.alias?.trim();
-    if (alias === undefined || alias === "") {
-      return;
-    }
-    counts.set(alias, (counts.get(alias) ?? 0) + 1);
-  });
-
-  return counts;
+function displayNameForModel(section: IniSection): string {
+  return section.values.alias?.trim() || section.name;
 }
 
 function modelInfoFromSections(sections: IniSection[], options: Options): ModelInfo[] {
   const globalValues = sections.find((section) => section.name === "*")?.values ?? {};
   const modelSections = sections.filter((section) => section.name !== "*" && section.values.model !== undefined);
-  const aliasCounts = countAliases(modelSections);
 
   const models = modelSections.map((section) => {
     const contextWindow = effectiveContextWindow(section, globalValues, options.defaultContext);
     const maxOutputTokens = effectiveMaxOutputTokens(section, globalValues, options.maxOutputTokens, contextWindow);
-    const id = modelIdForSection(section, aliasCounts);
 
     return {
-      id,
-      name: displayNameForModel(id),
+      id: section.name,
+      name: displayNameForModel(section),
       contextWindow,
       maxOutputTokens,
       maxInputTokens: contextWindow - maxOutputTokens,
