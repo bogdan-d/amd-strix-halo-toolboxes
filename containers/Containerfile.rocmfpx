@@ -171,7 +171,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   && \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
-COPY toolboxes/llama-grammar.patch /tmp/llama-grammar.patch
+COPY patches/llama-grammar.patch /tmp/llama-grammar.patch
 COPY containers/rocmfpx-warning.patch /tmp/rocmfpx-warning.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
@@ -352,7 +352,7 @@ RUN if [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   mkdir -p /opt/rocm-runtime; \
   fi
 
-COPY toolboxes/gguf-vram-estimator.py /usr/local/bin/gguf-vram-estimator.py
+COPY scripts/gguf-vram-estimator.py /usr/local/bin/gguf-vram-estimator.py
 RUN chmod +x /usr/local/bin/gguf-vram-estimator.py
 
 # runtime stage
