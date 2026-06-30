@@ -280,7 +280,9 @@ function modelInfoFromSections(sections: IniSection[], options: Options): ModelI
       maxInputTokens: contextWindow - maxOutputTokens,
       reasoning: boolFromLlama(section.values.reasoning ?? globalValues.reasoning, true),
       toolCalling: options.toolCalling,
-      vision: section.values.mmproj !== undefined || section.name.split(":").includes("vision"),
+      // Variant suffixes are '~'-delimited in preset section names (see
+      // generate-models-preset.sh); ':' would be canonicalized by llama.cpp.
+      vision: section.values.mmproj !== undefined || section.name.split("~").includes("vision"),
     };
   });
 

@@ -7,8 +7,8 @@ Usage:
   bin/run.sh [options] <backend> <command> [args...]
 
 Options:
-  --with-non-reasoning  Add generated Qwen/Qwen-derived :non-reasoning presets
-  --with-vision         Add generated :vision presets for models with mmproj GGUF
+  --with-non-reasoning  Add generated Qwen/Qwen-derived ~non-reasoning presets
+  --with-vision         Add generated ~vision presets for models with mmproj GGUF
   --with-configs        Refresh coding-tool configs from the generated preset
 
 Backends:

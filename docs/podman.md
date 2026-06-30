@@ -88,7 +88,7 @@ Discovery exposes every non-`mmproj` `*.gguf` file. Generated names use
 `unsloth/Qwen3.6-27B-MTP-UD-Q4_K_XL`. A single same-directory
 `mmproj*.gguf` is paired automatically; multiple projectors are ignored with a
 warning. Paths or filenames containing `MTP` or `mtp` get the local MTP
-speculation settings. Qwen-derived models also get a `:non-reasoning` variant.
+speculation settings. Qwen-derived models also get a `~non-reasoning` variant.
 
 The generated Qwen3.6 presets use `ctx-size = 262144` as the total server
 context pool, `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV,
@@ -112,17 +112,17 @@ same long prompt.
 curl http://127.0.0.1:8080/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL",
+    "model": "unsloth/Qwen3.6-27B-MTP-UD-Q4_K_XL",
     "messages": [{"role": "user", "content": "Write a short Rust CLI plan."}]
   }'
 ```
 
 When a model path or filename contains `MTP`/`mtp`, generated presets include a
-plain non-speculative route and a separate `:mtp` route with draft-MTP
+plain non-speculative route and a separate `~mtp` route with draft-MTP
 speculation enabled:
 
 ```json
-"model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:mtp"
+"model": "unsloth/Qwen3.6-27B-MTP-UD-Q4_K_XL~mtp"
 ```
 
 ROCmFPX-compatible GGUFs use the ROCmFPX fork backend matrix:
@@ -145,10 +145,16 @@ Normal generated presets skip ROCmFPX-compatible GGUFs so stock images do not
 expose routes that cannot load. The fork profile emits reasoning-enabled routes
 per compatible model; pass `--with-non-reasoning` to add matching
 non-reasoning routes.
-Only models identified as MTP-capable get `:mtp` route IDs, `[MTP]` aliases,
+Only models identified as MTP-capable get `~mtp` route IDs, `[MTP]` aliases,
 and `draft-mtp` flags; MTP-capable files also keep non-speculative base routes.
-Generated IDs use `author/model-file-stem`, plus route suffixes such as `:mtp`,
-`:vision`, and `:non-reasoning`. Generated aliases use one display pattern:
+Generated IDs use `author/model-file-stem`, plus route suffixes such as `~mtp`,
+`~vision`, and `~non-reasoning`. Suffixes are joined with `~` rather than `:`
+because llama.cpp's preset loader canonicalizes the tag after a `:` — it
+uppercases it and can drop a segment (`:non-reasoning` would become `:REASONING`
+and collide with `:mtp:non-reasoning`); with no `:` the id is preserved verbatim
+and matches across the stock and fork builds
+([ggml-org/llama.cpp#25150](https://github.com/ggml-org/llama.cpp/issues/25150)).
+Generated aliases use one display pattern:
 `[author] model-name [weights / active-weights] [quant] [route/features] [disk-size]`,
 for example
 `[bartowski] allura-org_Qwen3.6-Anko [35B / A3B] [Q6_K_L] [VISION] [29G]`
@@ -179,8 +185,8 @@ uses the same Strix runtime/cache profile, but `ctx-size = 131072`, no
 
 `jcbtc/qwen3.6-35b-a3b-crown-halo-mtp-dynamic` is a special-case Strix Halo
 MTP profile. The generator always emits exactly two routes for it, regardless
-of `--with-non-reasoning`: `:mtp` with reasoning enabled and
-`:mtp:non-reasoning` with reasoning disabled. Both routes keep the model-card
+of `--with-non-reasoning`: `~mtp` with reasoning enabled and
+`~mtp~non-reasoning` with reasoning disabled. Both routes keep the model-card
 profile in the model section itself: 131072 context, row split, `f16/f16` main
 and draft KV, `draft-mtp` depth 2, single-slot serving, Strix polling, and
 `b2048/u512`. The routes use generated display aliases, for example
@@ -190,7 +196,7 @@ so the router can load both presets without alias collisions.
 
 Generated presets are text-only by default, even when a same-directory
 `mmproj*.gguf` file exists. Pass `--with-vision` before the backend to add
-separate `:vision` model IDs with `mmproj` wired in:
+separate `~vision` model IDs with `mmproj` wired in:
 
 ```bash
 bin/run.sh --with-vision rocm models
@@ -198,7 +204,7 @@ bin/run.sh --with-vision rocm server
 ```
 
 For Qwen/Qwen-derived models, pass `--with-non-reasoning` before the backend to
-add `:non-reasoning` variants that use `reasoning = off` and the non-thinking
+add `~non-reasoning` variants that use `reasoning = off` and the non-thinking
 sampling defaults from the Unsloth Qwen3.6 guidance. For example:
 
 ```bash
@@ -207,12 +213,12 @@ bin/run.sh --with-non-reasoning rocm server
 ```
 
 ```json
-"model": "unsloth/Qwen3.6-27B-MTP-GGUF:UD-Q4_K_XL:non-reasoning"
+"model": "unsloth/Qwen3.6-27B-MTP-UD-Q4_K_XL~non-reasoning"
 ```
 
 The flags can be combined. A Qwen vision preset then also gets
-`:vision:non-reasoning`, and an MTP-capable Qwen vision preset gets
-`:vision:mtp` and `:vision:mtp:non-reasoning` siblings.
+`~vision~non-reasoning`, and an MTP-capable Qwen vision preset gets
+`~vision~mtp` and `~vision~mtp~non-reasoning` siblings.
 
 Use `LLAMA_MODELS_PRESET` to skip generation and point at an explicit preset
 under `MODELS_DIR`:
@@ -292,9 +298,9 @@ It reads model IDs, display aliases, and inherited `ctx-size` / `parallel`
 values from the llama.cpp preset. Coding-tool config IDs stay equal to the
 preset section names; a section's `alias`, when present, is used only as the
 display name. The generator then reports the per-slot context as
-`floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `:vision`
+`floor(ctx-size / parallel)`. Sections with `mmproj = ...` or a `~vision`
 suffix advertise image input; other sections stay text-only. `reasoning = off`
-sections are emitted as non-thinking/non-reasoning models, and explicit `:mtp`
+sections are emitted as non-thinking/non-reasoning models, and explicit `~mtp`
 sections are tagged as MTP models. The default output
 budget is `32768`, which matches the Qwen3.6 guidance used by this repo, but
 per-slot contexts below `100000` tokens are capped to `16384` output tokens.
@@ -464,6 +470,6 @@ podman run --rm -it \
 
 ## Notes
 
-The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. Generated presets omit stock Qwen `:non-reasoning` variants, ROCmFPX `:non-reasoning` variants, and mmproj-backed `:vision` variants unless `bin/run.sh` is called with `--with-non-reasoning` or `--with-vision`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
+The helper always adds `-fa 1` and `--no-mmap` for direct-model `server`, `mtp-server`, `load-test`, and `cli` because those are required for reliable Strix Halo runs. Preset `server` takes those settings from the generated preset based on `models-template.ini`, unless `LLAMA_MODELS_PRESET` points at an explicit preset. Generated presets omit stock Qwen `~non-reasoning` variants, ROCmFPX `~non-reasoning` variants, and mmproj-backed `~vision` variants unless `bin/run.sh` is called with `--with-non-reasoning` or `--with-vision`. For `bench`, it uses `-fa 1`, `-mmp 0`, `-p 2048`, `-n 32`, `-d 131072`, and the backend-specific `-ub` value.
 
 The preset passed to `server` and the model path passed to `server`, `mtp-server`, `load-test`, `cli`, or `bench` must be under `MODELS_DIR`, because only that directory is mounted into the container.

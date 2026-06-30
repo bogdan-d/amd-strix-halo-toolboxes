@@ -83,11 +83,11 @@ sections also emit `ubatch-size = 256` (the ROCm microbatch limit); Vulkan
 sections inherit `1024` from the `[*]` default. Crown Halo (`512`) and Nex
 (`256`) keep fixed ubatch sizes regardless of device. Each ROCmFPX section only
 overrides what differs: `reasoning-format = deepseek` for reasoning-on routes.
-Only models identified as MTP-capable get `:mtp` route IDs,
+Only models identified as MTP-capable get `~mtp` route IDs,
 `[MTP]` aliases, `spec-draft-device`, `spec-type = draft-mtp`,
 `spec-draft-type-k/v = f16`, `spec-draft-n-max = 5` (MoE models override to 2),
 and `spec-draft-p-split = 0.10`; those files also keep non-speculative base
-routes without the `:mtp` suffix. The fork rejects `checkpoint-min-step` in model
+routes without the `~mtp` suffix. The fork rejects `checkpoint-min-step` in model
 preset sections, so generated ROCmFPX presets omit that direct-command
 `-cpent` setting. The generator emits display aliases with the shared
 `[author] model-name [weights / active-weights] [quant] [route/features] [disk-size]`

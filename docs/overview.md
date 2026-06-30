@@ -99,7 +99,7 @@ Defaults encoded by the helper:
   `parallel = 4`, `q8_0` KV cache, device KV offload, unified KV, context
   checkpoints (`cache-ram = 32768`), `image-min-tokens = 1024`, coding-agent
   sampling defaults;
-- `:non-reasoning` preset variants for each discovered Qwen/Qwen-derived model
+- `~non-reasoning` preset variants for each discovered Qwen/Qwen-derived model
   (`reasoning = off`, non-thinking sampling);
 - automatic same-directory `mmproj*.gguf` pairing and MTP speculation settings
   for paths/filenames containing `MTP` or `mtp`;

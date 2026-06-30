@@ -10,8 +10,8 @@ Generate a llama.cpp --models-preset INI by copying shared defaults from the
 tracked template and appending discovered GGUF model sections.
 
 Options:
-  --with-non-reasoning  Add Qwen/Qwen-derived :non-reasoning variants.
-  --with-vision         Add :vision variants for models with one paired mmproj GGUF.
+  --with-non-reasoning  Add Qwen/Qwen-derived ~non-reasoning variants.
+  --with-vision         Add ~vision variants for models with one paired mmproj GGUF.
   --with-configs        Refresh coding-tool configs from the generated preset.
   --rocmfpx-only        Generate only ROCmFPX presets for the custom fork image.
   --device              Device name for all generated presets. Default: ROCm0.
@@ -115,6 +115,15 @@ model_id_base() {
   printf '%s\n' "$(filename_stem "$rel")"
 }
 
+# Route variant suffixes (mtp, non-reasoning, vision) and id-collision segments
+# are joined to the base id with '~' rather than ':'. llama.cpp's preset loader
+# canonicalizes the tag after the LAST ':' (common/preset.cpp canonical_tag):
+# it uppercases the tag and, for tags like "non-reasoning", keeps only the part
+# after the last '-' or '.', so ":non-reasoning" becomes ":REASONING" and
+# collides with ":mtp:non-reasoning" (silently deduped). With no ':' in the id
+# that transform never runs, so '~'-delimited ids stay verbatim and identical
+# across the stock and ROCmFPX fork server builds.
+# Ref: https://github.com/ggml-org/llama.cpp/issues/25150
 unique_model_id() {
   local base_id="$1"
   local rel="$2"
@@ -127,10 +136,10 @@ unique_model_id() {
   fi
 
   stem="$(filename_stem "$rel")"
-  candidate="$base_id:$stem"
+  candidate="$base_id~$stem"
   n=2
   while [[ -n "${seen_ids[$candidate]:-}" ]]; do
-    candidate="$base_id:$stem:$n"
+    candidate="$base_id~$stem~$n"
     n=$((n + 1))
   done
 
@@ -639,8 +648,8 @@ emit_crown_halo_mtp_dynamic_variants() {
   non_reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel" non-reasoning)" "$rel")"
   seen_aliases[$non_reasoning_alias]=1
 
-  emit_crown_halo_mtp_dynamic_section "$id:mtp" "$model_path" on "$reasoning_alias" "$moe"
-  emit_crown_halo_mtp_dynamic_section "$id:mtp:non-reasoning" "$model_path" off "$non_reasoning_alias" "$moe"
+  emit_crown_halo_mtp_dynamic_section "$id~mtp" "$model_path" on "$reasoning_alias" "$moe"
+  emit_crown_halo_mtp_dynamic_section "$id~mtp~non-reasoning" "$model_path" off "$non_reasoning_alias" "$moe"
 }
 
 emit_nex_n2_mini_rocmfpx_section() {
@@ -698,7 +707,7 @@ emit_rocmfpx_variants() {
 
   emit_rocmfpx_section "$id" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking"
   if (( WITH_NON_REASONING )); then
-    emit_rocmfpx_section "$id:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
+    emit_rocmfpx_section "$id~non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking"
   fi
 }
 
@@ -729,9 +738,9 @@ emit_rocmfpx_mtp_variants() {
   local thinking="${6:-on}"
   local moe="${7:-0}"
 
-  emit_rocmfpx_mtp_section "$id:mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking" "$moe"
+  emit_rocmfpx_mtp_section "$id~mtp" "$model_path" "$mmproj_path" on "$reasoning_alias" "$thinking" "$moe"
   if (( WITH_NON_REASONING )); then
-    emit_rocmfpx_mtp_section "$id:mtp:non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking" "$moe"
+    emit_rocmfpx_mtp_section "$id~mtp~non-reasoning" "$model_path" "$mmproj_path" off "$non_reasoning_alias" "$thinking" "$moe"
   fi
 }
 
@@ -743,7 +752,7 @@ emit_non_reasoning_section() {
   local moe="${5:-0}"
   local alias="${6:-}"
 
-  emit_model_section "$id:non-reasoning" "$model_path" "$mmproj_path" "$mtp" "$moe"
+  emit_model_section "$id~non-reasoning" "$model_path" "$mmproj_path" "$mtp" "$moe"
   if [[ -n "$alias" ]]; then
     printf 'alias = %s\n' "$alias"
   fi
@@ -878,7 +887,7 @@ while IFS= read -r host_file; do
           vision_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 1 1)" "$rel")"
           seen_aliases[$vision_non_reasoning_alias]=1
         fi
-        emit_rocmfpx_variants "$id:vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
+        emit_rocmfpx_variants "$id~vision" "$model_path" "$vision_alias" "$vision_non_reasoning_alias" "$mmproj_path" "$thinking" >> "$tmp_output"
         if is_mtp_model "$rel"; then
           vision_mtp_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 1)" "$rel")"
           seen_aliases[$vision_mtp_alias]=1
@@ -887,7 +896,7 @@ while IFS= read -r host_file; do
             vision_mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 1)" "$rel")"
             seen_aliases[$vision_mtp_non_reasoning_alias]=1
           fi
-          emit_rocmfpx_mtp_variants "$id:vision" "$model_path" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" "$mmproj_path" "$thinking" "$moe" >> "$tmp_output"
+          emit_rocmfpx_mtp_variants "$id~vision" "$model_path" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" "$mmproj_path" "$thinking" "$moe" >> "$tmp_output"
         fi
       fi
     fi
@@ -911,13 +920,13 @@ while IFS= read -r host_file; do
       mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 0)" "$rel")"
       seen_aliases[$mtp_non_reasoning_alias]=1
     fi
-    emit_model_variants "$id:mtp" "$model_path" "" 1 "$qwen" "$moe" "$mtp_alias" "$mtp_non_reasoning_alias" >> "$tmp_output"
+    emit_model_variants "$id~mtp" "$model_path" "" 1 "$qwen" "$moe" "$mtp_alias" "$mtp_non_reasoning_alias" >> "$tmp_output"
   fi
 
   if (( WITH_VISION )); then
     mmproj_path="$(find_mmproj "$host_file" "$rel")"
     if [[ -n "$mmproj_path" ]]; then
-      vision_id="$id:vision"
+      vision_id="$id~vision"
       vision_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 1)" "$rel")"
       seen_aliases[$vision_alias]=1
       vision_non_reasoning_alias=""
@@ -934,7 +943,7 @@ while IFS= read -r host_file; do
           vision_mtp_non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 1)" "$rel")"
           seen_aliases[$vision_mtp_non_reasoning_alias]=1
         fi
-        emit_model_variants "$vision_id:mtp" "$model_path" "$mmproj_path" 1 "$qwen" "$moe" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" >> "$tmp_output"
+        emit_model_variants "$vision_id~mtp" "$model_path" "$mmproj_path" 1 "$qwen" "$moe" "$vision_mtp_alias" "$vision_mtp_non_reasoning_alias" >> "$tmp_output"
       fi
     fi
   fi
