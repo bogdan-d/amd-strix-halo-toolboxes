@@ -11,6 +11,14 @@ Build all images:
 
 ```bash
 bin/build.sh
+bin/build.sh all
+```
+
+Build only the stock ROCm/Vulkan images, or only the ROCmFPX fork images:
+
+```bash
+bin/build.sh all-stock
+bin/build.sh all-fpx
 ```
 
 Build one image:
@@ -38,8 +46,9 @@ The default tags are:
 By default, `rocm` is also tagged as
 `localhost/strix-llama:rocm-7.2.4`, and `rocm-next` is also tagged
 as `localhost/strix-llama:rocm7-nightlies`.
-The `*-fpx` targets are explicit-only and build the ROCmFPX fork
-against the same Vulkan/stable ROCm/ROCm nightly backend matrix.
+The `*-fpx` targets build the ROCmFPX fork against the same
+Vulkan/stable ROCm/ROCm nightly backend matrix. They are included in
+`all` and `all-fpx`; use `all-stock` to skip them.
 
 ## Build Script
 

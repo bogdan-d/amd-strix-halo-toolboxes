@@ -4,7 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bin/build.sh [--no-cache] [--with-rocwmma] [all|rocm[=VERSION]|rocm-next|vulkan|vulkan-fpx|rocm-fpx|rocm-next-fpx]...
+  bin/build.sh [--no-cache] [--with-rocwmma] [all|all-stock|all-fpx|rocm[=VERSION]|rocm-next|vulkan|vulkan-fpx|rocm-fpx|rocm-next-fpx]...
 
 Environment:
   BUILDER            buildah or podman. Default: buildah
@@ -54,6 +54,9 @@ Environment:
 
 Examples:
   bin/build.sh
+  bin/build.sh all
+  bin/build.sh all-stock
+  bin/build.sh all-fpx
   bin/build.sh rocm
   bin/build.sh rocm=7.2.4
   bin/build.sh rocm-next
@@ -133,7 +136,13 @@ for target in "$@"; do
       NO_CACHE=1
       ;;
     all)
+      TARGETS+=(rocm rocm-next vulkan rocm-fpx rocm-next-fpx vulkan-fpx)
+      ;;
+    all-stock)
       TARGETS+=(rocm rocm-next vulkan)
+      ;;
+    all-fpx)
+      TARGETS+=(rocm-fpx rocm-next-fpx vulkan-fpx)
       ;;
     rocm|rocm-next|vulkan|vulkan-fpx|rocm-fpx|rocm-next-fpx)
       TARGETS+=("$target")
@@ -165,7 +174,7 @@ for target in "$@"; do
 done
 
 if [[ ${#TARGETS[@]} -eq 0 ]]; then
-  TARGETS+=(rocm rocm-next vulkan)
+  TARGETS+=(rocm rocm-next vulkan rocm-fpx rocm-next-fpx vulkan-fpx)
 fi
 
 if [[ ! "$ROCM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
