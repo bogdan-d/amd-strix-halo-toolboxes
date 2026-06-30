@@ -21,7 +21,9 @@ The common path is direct and reproducible:
   - `build.sh` — Buildah/Podman image builds;
   - `run.sh` — Podman runtime wrapper with Strix Halo defaults;
   - `clear.sh` — clear local images, containers, builder cache, and build logs;
+  - `update-refs.sh` — refresh the `.env` llama.cpp commit pins to branch HEAD;
   - `env-defaults.sh` — load `.env` without overriding existing env vars;
+  - `llama-refs.sh` — shared (sourced) llama.cpp commit-resolution helper;
   - `generate-models-preset.sh` and the coding-tool config generators.
 - `patches/` — build assets copied into images (`llama-grammar.patch`).
 - `scripts/` — host utilities copied into images

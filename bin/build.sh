@@ -68,8 +68,11 @@ EOF
 }
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=./env-defaults.sh
 source "$PROJECT_ROOT/bin/env-defaults.sh"
 load_dotenv_defaults "$PROJECT_ROOT/.env"
+# shellcheck source=./llama-refs.sh
+source "$PROJECT_ROOT/bin/llama-refs.sh"
 
 BUILDER="${BUILDER:-buildah}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-localhost/strix-llama}"
@@ -209,28 +212,6 @@ if [[ -n "${BUILD_EXTRA_ARGS:-}" ]]; then
   # shellcheck disable=SC2206
   BUILD_EXTRA=(${BUILD_EXTRA_ARGS})
 fi
-
-resolve_commit() {
-  local repo="$1"
-  local ref="$2"
-
-  if command -v gh >/dev/null 2>&1 && [[ "$repo" == *github.com/* ]]; then
-    local owner_repo="${repo#*github.com/}"
-    owner_repo="${owner_repo%.git}"
-    if [[ "$owner_repo" == */* ]]; then
-      gh api "repos/$owner_repo/commits/$ref" \
-        --jq '[.sha, (.commit.message | split("\n")[0])] | @tsv' 2>/dev/null && return
-    fi
-  fi
-
-  local tmp
-  tmp="$(mktemp -d)" || return 0
-  git -C "$tmp" init -q 2>/dev/null || { rm -rf "$tmp"; return 0; }
-  if git -C "$tmp" fetch --quiet --depth 1 --filter=tree:0 "$repo" "$ref" 2>/dev/null; then
-    git -C "$tmp" log -1 --format='%H%x09%s' FETCH_HEAD 2>/dev/null
-  fi
-  rm -rf "$tmp"
-}
 
 print_commit_info() {
   local clickable="$1"

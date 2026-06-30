@@ -144,6 +144,16 @@ LLAMA_REF=95405ac65 bin/build.sh rocm
 ROCMFPX_LLAMA_REF=<sha> bin/build.sh rocm-fpx
 ```
 
+Refresh both pins to the current branch HEAD with `bin/update-refs.sh` - it
+resolves each branch tip and upserts the ids into `.env`, creating the file or
+variables if missing and leaving the rest of `.env` (including secrets)
+untouched:
+
+```bash
+bin/update-refs.sh            # resolve and write both ids
+bin/update-refs.sh --dry-run  # show old -> new without writing
+```
+
 The old ROCm-only `95405ac65` pin and the ROCmFPX `014cd28b...` pin were
 workarounds while debugging Strix Halo ROCm model-load crashes; the recent
 latest-llama.cpp crash reproduced when ROCm/HIP paths were exported

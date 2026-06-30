@@ -24,6 +24,7 @@ EOF
 }
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=./env-defaults.sh
 source "$PROJECT_ROOT/bin/env-defaults.sh"
 load_dotenv_defaults "$PROJECT_ROOT/.env"
 
