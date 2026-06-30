@@ -18,7 +18,7 @@ ARG ROCWMMA_FATTN=0
 ARG ROCMFPX_DECODE_TUNE=stable
 ARG LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git
 ARG LLAMA_BRANCH=main
-ARG LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b
+ARG LLAMA_REF=
 
 # build stage
 FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION} AS builder
@@ -361,6 +361,15 @@ FROM registry.fedoraproject.org/fedora-minimal:${FEDORA_VERSION} AS runtime
 ARG BUILD_TYPE
 ARG ROCM_VERSION
 ARG ROCM_REPO_URL
+ARG LLAMA_REPO
+ARG LLAMA_BRANCH
+ARG LLAMA_REF
+
+LABEL org.opencontainers.image.source="${LLAMA_REPO}" \
+      org.opencontainers.image.revision="${LLAMA_REF}" \
+      strix-llama.build-type="${BUILD_TYPE}" \
+      strix-llama.llama.branch="${LLAMA_BRANCH}" \
+      strix-llama.llama.ref="${LLAMA_REF}"
 
 RUN case "${BUILD_TYPE}" in \
   vulkan-fpx|rocm-fpx|rocm-next-fpx) ;; \

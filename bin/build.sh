@@ -17,14 +17,21 @@ Environment:
   LLAMA_REPO         llama.cpp repository for stock backends.
                      Default: https://github.com/ggml-org/llama.cpp.git
   LLAMA_BRANCH       llama.cpp branch for stock backends. Default: master
-  LLAMA_REF          llama.cpp ref for all backends. Default: empty, use LLAMA_BRANCH
+  LLAMA_REF          llama.cpp ref for stock backends; overrides the .env pin.
+                     Default: $STOCK_LLAMA_BRANCH from .env (empty -> float on
+                     LLAMA_BRANCH)
+  STOCK_LLAMA_BRANCH Commit id pin for stock backends, read from .env.
+                     Default: empty
   ROCMFPX_LLAMA_REPO
                      llama.cpp fork for FPX targets.
                      Default: https://github.com/charlie12345/ROCmFPX.git
   ROCMFPX_LLAMA_BRANCH
                      llama.cpp fork branch for FPX targets. Default: main
-  ROCMFPX_LLAMA_REF  llama.cpp fork ref for FPX targets.
-                     Default: 014cd28b97d539a0365979d88e9846fad5aa822b
+  ROCMFPX_LLAMA_REF  llama.cpp fork ref for FPX targets; overrides the .env pin.
+                     Default: $FPX_LLAMA_BRANCH from .env (empty -> float on
+                     ROCMFPX_LLAMA_BRANCH)
+  FPX_LLAMA_BRANCH   Commit id pin for FPX targets, read from .env.
+                     Default: empty
   ROCMFPX_DECODE_TUNE
                      Optional ROCmFPX Strix decode tuning profile.
                      Default: stable
@@ -71,10 +78,10 @@ ROCMFPX_CONTAINERFILE="${ROCMFPX_CONTAINERFILE:-containers/Containerfile.rocmfpx
 ROCM_VERSION="${ROCM_VERSION:-7.2.4}"
 LLAMA_REPO="${LLAMA_REPO:-https://github.com/ggml-org/llama.cpp.git}"
 LLAMA_BRANCH="${LLAMA_BRANCH:-master}"
-LLAMA_REF="${LLAMA_REF:-}"
+LLAMA_REF="${LLAMA_REF:-${STOCK_LLAMA_BRANCH:-}}"
 ROCMFPX_LLAMA_REPO="${ROCMFPX_LLAMA_REPO:-https://github.com/charlie12345/ROCmFPX.git}"
 ROCMFPX_LLAMA_BRANCH="${ROCMFPX_LLAMA_BRANCH:-main}"
-ROCMFPX_LLAMA_REF="${ROCMFPX_LLAMA_REF:-014cd28b97d539a0365979d88e9846fad5aa822b}"
+ROCMFPX_LLAMA_REF="${ROCMFPX_LLAMA_REF:-${FPX_LLAMA_BRANCH:-}}"
 ROCMFPX_DECODE_TUNE="${ROCMFPX_DECODE_TUNE:-stable}"
 ROCM_NIGHTLY_TARBALL="${ROCM_NIGHTLY_TARBALL:-therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz}"
 CPU_TARGET="${CPU_TARGET:-generic}"
@@ -242,6 +249,33 @@ print_commit_info() {
   fi
 }
 
+declare -A _LLAMA_COMMIT_CACHE=()
+
+resolve_commit_cached() {
+  local repo="$1"
+  local ref="$2"
+  local key="$repo|$ref"
+  if [[ -v _LLAMA_COMMIT_CACHE["$key"] ]]; then
+    printf '%s' "${_LLAMA_COMMIT_CACHE["$key"]}"
+    return 0
+  fi
+  local r
+  r="$(resolve_commit "$repo" "$ref")" || r=""
+  _LLAMA_COMMIT_CACHE["$key"]="$r"
+  printf '%s' "$r"
+}
+
+image_label() {
+  local image="$1"
+  local key="$2"
+  if command -v podman >/dev/null 2>&1; then
+    podman image inspect --format "{{index .Config.Labels \"$key\"}}" "$image" 2>/dev/null
+  elif command -v buildah >/dev/null 2>&1; then
+    buildah inspect --type image --format "{{index .OCIv1.Config.Labels \"$key\"}}" "$image" 2>/dev/null
+  fi
+}
+
+
 build_image() {
   local build_type="$1"
   local rocm_repo_url="https://repo.radeon.com/rocm/rhel10/${ROCM_VERSION}/main"
@@ -249,6 +283,7 @@ build_image() {
   local cache_args=()
   local no_cache_args=()
   local cmd=()
+  local log_file=""
   local containerfile="$CONTAINERFILE"
   local llama_repo="$LLAMA_REPO"
   local llama_branch="$LLAMA_BRANCH"
@@ -329,32 +364,35 @@ build_image() {
       ;;
   esac
 
-  local llama_desc
-  llama_desc="repo=$llama_repo branch=$llama_branch"
+  local llama_desc="repo=$llama_repo branch=$llama_branch"
   if [[ -n "$llama_ref" ]]; then
     llama_desc+=" ref=$llama_ref"
   fi
-  local commit_sha=""
-  local commit_subject=""
-  local commit_url=""
-  if [[ "$DRY_RUN" != "1" ]]; then
-    local resolved
-    resolved="$(resolve_commit "$llama_repo" "${llama_ref:-$llama_branch}" 2>/dev/null)" || resolved=""
-    if [[ -n "$resolved" ]]; then
-      commit_sha="${resolved%%$'\t'*}"
-      commit_subject="${resolved#*$'\t'}"
-      if [[ "$llama_repo" == *github.com/* ]]; then
-        local owner_repo="${llama_repo#*github.com/}"
-        owner_repo="${owner_repo%.git}"
-        commit_url="https://github.com/$owner_repo/commit/$commit_sha"
-      fi
-    fi
+  # Up-front provenance: print the commit subject before building. Prefer the
+  # existing image's OCI label (the actual baked commit) when the image is
+  # already cached; otherwise fall back to the pinned ref from .env / LLAMA_REF.
+  # Best-effort: silent on failure (e.g. offline, or image not yet built).
+  local display_sha="$llama_ref"
+  local label_sha
+  label_sha="$(image_label "${tag_args[1]}" 'org.opencontainers.image.revision')" || label_sha=""
+  [[ -n "$label_sha" ]] && display_sha="$label_sha"
+  local display_subject=""
+  if [[ -n "$display_sha" ]]; then
+    local r
+    r="$(resolve_commit_cached "$llama_repo" "$display_sha" 2>/dev/null)" || r=""
+    display_subject="${r#*$'\t'}"
+  fi
+  local display_url=""
+  if [[ -n "$display_sha" && "$llama_repo" == *github.com/* ]]; then
+    local owner_repo="${llama_repo#*github.com/}"
+    owner_repo="${owner_repo%.git}"
+    display_url="https://github.com/$owner_repo/commit/$display_sha"
   fi
   local clickable=0
   [[ -t 1 ]] && clickable=1
   printf 'Building %s\n' "${tag_args[*]}"
   printf '  llama.cpp: %s\n' "$llama_desc"
-  print_commit_info "$clickable" "$commit_subject" "$commit_url"
+  print_commit_info "$clickable" "$display_subject" "$display_url"
 
   if [[ "$BUILDER" == "buildah" ]]; then
     cmd=("$BUILDER" bud \
@@ -408,13 +446,12 @@ build_image() {
   else
     mkdir -p "$BUILD_LOG_DIR"
     local started_at
-    local log_file
     started_at="$(date +%Y%m%d-%H%M%S)"
     log_file="$BUILD_LOG_DIR/${started_at}-${build_type}-${CPU_TARGET}.log"
     {
       printf 'Building %s\n' "${tag_args[*]}"
       printf '  llama.cpp: %s\n' "$llama_desc"
-      print_commit_info 0 "$commit_subject" "$commit_url"
+      print_commit_info 0 "$display_subject" "$display_url"
       printf 'Full build log: %s\n' "$log_file"
     } >> "$log_file"
     printf 'Full build log: %s\n' "$log_file"

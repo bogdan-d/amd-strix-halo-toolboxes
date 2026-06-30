@@ -48,13 +48,15 @@ Six build types are supported across two Containerfiles:
 path for `vulkan-fpx`, `rocm-fpx`, and `rocm-next-fpx`, with its own source
 cache.
 
-The stock targets follow the llama.cpp `master` line by default; use `LLAMA_REF`
-only for tests, bisects, or deliberately preserved builds across stock backends.
-The default repository is `ggml-org/llama.cpp` (the canonical upstream). The
-`*-fpx` targets use `charlie12345/ROCmFPX` branch `main`; those images also build
-the fork's local validation tools (`llama-completion`, `llama-perplexity`,
-`test-backend-ops`, `test-quantize-fns`, `test-quantize-perf`) because the
-ROCmFPX smoke and regression scripts use them.
+Both stock and FPX targets pin their llama.cpp checkout to a commit id read from
+the gitignored `.env` (`STOCK_LLAMA_BRANCH` / `FPX_LLAMA_BRANCH`, each tracking
+its branch HEAD); clear a pin to float on the branch tip, or override per build
+with `LLAMA_REF` / `ROCMFPX_LLAMA_REF`. Stock targets use canonical
+`ggml-org/llama.cpp` `master`. The `*-fpx` targets use `charlie12345/ROCmFPX`
+branch `main` and also build the fork's local validation tools
+(`llama-completion`, `llama-perplexity`, `test-backend-ops`,
+`test-quantize-fns`, `test-quantize-perf`) because the ROCmFPX smoke and
+regression scripts use them.
 
 ## Build workflow
 
@@ -65,9 +67,9 @@ can also use Podman through `BUILDER=podman`. Notable behavior:
   `vulkan`, `vulkan-radv`, `vulkan-fpx`, `rocm-fpx`, `rocm-next-fpx`;
 - automatic Containerfile selection — stock targets use `containers/Containerfile`,
   ROCmFPX targets use `containers/Containerfile.rocmfpx`;
-- `LLAMA_REF` to optionally pin llama.cpp across stock backends;
-- `ROCMFPX_LLAMA_REPO` / `ROCMFPX_LLAMA_BRANCH` / `ROCMFPX_LLAMA_REF` for the
-  FPX fork target;
+- `STOCK_LLAMA_BRANCH` / `FPX_LLAMA_BRANCH` (in `.env`) to pin the llama.cpp
+  checkout per branch; `LLAMA_REF` / `ROCMFPX_LLAMA_REF` override it per build;
+- `ROCMFPX_LLAMA_REPO` / `ROCMFPX_LLAMA_BRANCH` for the FPX fork source;
 - `ROCMFPX_DECODE_TUNE` for opt-in Strix ROCmFPX decode launch tuning (default
   `stable`);
 - `CPU_TARGET=generic|strix-halo|native` (`generic` is the reproducible default);

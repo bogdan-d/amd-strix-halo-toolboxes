@@ -115,31 +115,40 @@ This passes `-DGGML_HIP_ROCWMMA_FATTN=ON` to ROCm CMake builds only. Stable
 ROCm builds also install `rocwmma-devel` in the builder stage when enabled.
 Vulkan builds ignore this option.
 
-Stock targets leave `LLAMA_REF` empty by default, so they follow
-`LLAMA_BRANCH`.
-The old ROCm-only `95405ac65` pin was a workaround while debugging Strix Halo
-ROCm model-load crashes. The recent latest-llama.cpp crash reproduced when
-ROCm/HIP paths were exported process-wide in the runtime environment; current
-images avoid those exports and expose ROCm libraries through `ldconfig` instead.
-Set `LLAMA_REF` only when testing, bisecting, or preserving a known llama.cpp
-build across all backends:
+Both stock and ROCmFPX targets leave `LLAMA_REF` empty in the Containerfiles, so
+a raw `buildah`/`podman` build floats on `LLAMA_BRANCH`. `bin/build.sh` instead
+**pins** the checkout to a commit id read from `.env`, which keeps the layer
+cache honest: a floating branch checkout has a stable build-arg, so Buildah
+would otherwise reuse a stale llama.cpp layer while the script reports the
+current HEAD. Pinning makes the `LLAMA_REF` build-arg change when the id
+changes, rebuilding only the llama.cpp layers (base image and ROCm toolchain
+stay cached) - see [Image Provenance](#image-provenance). The pins live in the
+gitignored `.env` (alongside local secrets), so they are local-only:
+
+```bash
+# .env
+STOCK_LLAMA_BRANCH=<stock llama.cpp master HEAD commit id>
+FPX_LLAMA_BRANCH=<ROCmFPX main HEAD commit id>
+```
+
+`STOCK_LLAMA_BRANCH` feeds `LLAMA_REF` for the stock targets
+(`rocm`/`rocm-next`/`vulkan` - upstream `llama.cpp` on `master`), and
+`FPX_LLAMA_BRANCH` feeds `ROCMFPX_LLAMA_REF` for the `*-fpx` targets (the
+ROCmFPX fork on `main`). Bump an id in `.env` to move a build forward; set it
+empty (or unset it) to float on the branch tip again. An explicit
+`LLAMA_REF`/`ROCMFPX_LLAMA_REF` on the command line still takes precedence -
+useful for testing or bisecting:
 
 ```bash
 LLAMA_REF=95405ac65 bin/build.sh rocm
+ROCMFPX_LLAMA_REF=<sha> bin/build.sh rocm-fpx
 ```
 
-The ROCmFPX targets are isolated from stock defaults. They build
-`https://github.com/charlie12345/ROCmFPX.git` branch `main` pinned to
-`014cd28b97d539a0365979d88e9846fad5aa822b`. Override
-`ROCMFPX_LLAMA_REPO`, `ROCMFPX_LLAMA_BRANCH`, or `ROCMFPX_LLAMA_REF` only when
-testing a newer ROCmFPX revision:
-
-```bash
-bin/build.sh vulkan-fpx
-bin/build.sh rocm-fpx
-bin/build.sh rocm-next-fpx
-ROCMFPX_LLAMA_REF=main bin/build.sh rocm-fpx
-```
+The old ROCm-only `95405ac65` pin and the ROCmFPX `014cd28b...` pin were
+workarounds while debugging Strix Halo ROCm model-load crashes; the recent
+latest-llama.cpp crash reproduced when ROCm/HIP paths were exported
+process-wide in the runtime environment, and current images avoid those exports
+and expose ROCm libraries through `ldconfig` instead.
 
 Optional ROCmFPX Strix decode tuning profiles mirror the fork's
 `scripts/rocmfp4-decode-tune-flags.sh` helpers. Default is `stable`, matching
@@ -200,6 +209,41 @@ Disable the extra version/nightly alias tags:
 TAG_VERSION=0 TAG_NIGHTLY_ALIAS=0 bin/build.sh all
 ```
 
+## Image Provenance
+
+Every image records the llama.cpp commit it was built from as OCI labels in its
+runtime stage, so you can verify what an image actually contains even when it
+was served from cache. The labels are:
+
+| Label | Meaning |
+| :--- | :--- |
+| `org.opencontainers.image.source` | llama.cpp repository URL |
+| `org.opencontainers.image.revision` | exact commit sha baked into the image |
+| `strix-llama.build-type` | backend target (`rocm`, `vulkan-fpx`, ...) |
+| `strix-llama.llama.branch` | `LLAMA_BRANCH` |
+| `strix-llama.llama.ref` | `LLAMA_REF` (the pinned sha) |
+
+Inspect the commit shipped in an image:
+
+```bash
+podman image inspect --format \
+  '{{ index .Config.Labels "org.opencontainers.image.revision" }}' \
+  localhost/strix-llama:rocm
+```
+
+Before each build, `bin/build.sh` prints the commit subject up front (and
+writes it to the build-log header). It prefers the existing image's
+`org.opencontainers.image.revision` label - the actual baked commit - when the
+image is already cached, and otherwise falls back to the pinned id from `.env`
+(`STOCK_LLAMA_BRANCH` / `FPX_LLAMA_BRANCH`). The build itself always pins to the
+`.env` id, so a cached image whose label differs from `.env` is rebuilt to the
+`.env` id. Compare a label sha to the upstream branch HEAD to tell whether a
+cached image is current:
+
+```bash
+git ls-remote https://github.com/ggml-org/llama.cpp.git refs/heads/master
+```
+
 ## Continuous Integration
 
 `.github/workflows/build.yml` drives `bin/build.sh` with `BUILDER=buildah` on an
@@ -221,13 +265,20 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm \
   --build-arg ROCM_VERSION=7.2.4 \
   --build-arg ROCM_REPO_URL=https://repo.radeon.com/rocm/rhel10/7.2.4/main \
-  --build-arg LLAMA_REF= \
+  --build-arg LLAMA_REF=<master-HEAD-sha> \
   --build-arg CPU_TARGET=generic \
   --build-arg ROCWMMA_FATTN=0 \
   -t localhost/strix-llama:rocm \
   -t localhost/strix-llama:rocm-7.2.4 \
   -f containers/Containerfile .
 ```
+
+`<master-HEAD-sha>` and `<fpx-HEAD-sha>` are the values of `STOCK_LLAMA_BRANCH`
+and `FPX_LLAMA_BRANCH` from `.env`, which `bin/build.sh` passes as `LLAMA_REF`.
+Raw `buildah`/`podman` callers must pass a concrete sha themselves (the `.env`
+pins are a `bin/build.sh` convenience), or leave `LLAMA_REF` empty to float on
+the branch tip - which defeats the llama.cpp layer-cache correctness described
+above.
 
 For nightly ROCm:
 
@@ -247,7 +298,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=vulkan-fpx \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git \
   --build-arg LLAMA_BRANCH=main \
-  --build-arg LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b \
+  --build-arg LLAMA_REF=<fpx-HEAD-sha> \
   -t localhost/strix-llama:vulkan-fpx \
   -f containers/Containerfile.rocmfpx .
 ```
@@ -259,7 +310,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-fpx \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git \
   --build-arg LLAMA_BRANCH=main \
-  --build-arg LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b \
+  --build-arg LLAMA_REF=<fpx-HEAD-sha> \
   -t localhost/strix-llama:rocm-fpx \
   -f containers/Containerfile.rocmfpx .
 ```
@@ -271,7 +322,7 @@ buildah bud --pull --format oci --layers \
   --build-arg BUILD_TYPE=rocm-next-fpx \
   --build-arg LLAMA_REPO=https://github.com/charlie12345/ROCmFPX.git \
   --build-arg LLAMA_BRANCH=main \
-  --build-arg LLAMA_REF=014cd28b97d539a0365979d88e9846fad5aa822b \
+  --build-arg LLAMA_REF=<fpx-HEAD-sha> \
   --build-arg ROCM_NIGHTLY_TARBALL=therock-dist-linux-gfx1151-7.13.0a20260515.tar.gz \
   -t localhost/strix-llama:rocm-next-fpx \
   -f containers/Containerfile.rocmfpx .
