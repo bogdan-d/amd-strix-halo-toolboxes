@@ -203,6 +203,45 @@ if [[ -n "${BUILD_EXTRA_ARGS:-}" ]]; then
   BUILD_EXTRA=(${BUILD_EXTRA_ARGS})
 fi
 
+resolve_commit() {
+  local repo="$1"
+  local ref="$2"
+
+  if command -v gh >/dev/null 2>&1 && [[ "$repo" == *github.com/* ]]; then
+    local owner_repo="${repo#*github.com/}"
+    owner_repo="${owner_repo%.git}"
+    if [[ "$owner_repo" == */* ]]; then
+      gh api "repos/$owner_repo/commits/$ref" \
+        --jq '[.sha, (.commit.message | split("\n")[0])] | @tsv' 2>/dev/null && return
+    fi
+  fi
+
+  local tmp
+  tmp="$(mktemp -d)" || return 0
+  git -C "$tmp" init -q 2>/dev/null || { rm -rf "$tmp"; return 0; }
+  if git -C "$tmp" fetch --quiet --depth 1 --filter=tree:0 "$repo" "$ref" 2>/dev/null; then
+    git -C "$tmp" log -1 --format='%H%x09%s' FETCH_HEAD 2>/dev/null
+  fi
+  rm -rf "$tmp"
+}
+
+print_commit_info() {
+  local clickable="$1"
+  local subject="$2"
+  local url="$3"
+  if [[ -z "$subject" ]]; then
+    return 0
+  fi
+  if [[ "$clickable" == "1" && -n "$url" ]]; then
+    printf '  commit: \e]8;;%s\e\\%s\e]8;;\e\\\n' "$url" "$subject"
+  else
+    printf '  commit: %s\n' "$subject"
+    if [[ -n "$url" ]]; then
+      printf '  commit url: %s\n' "$url"
+    fi
+  fi
+}
+
 build_image() {
   local build_type="$1"
   local rocm_repo_url="https://repo.radeon.com/rocm/rhel10/${ROCM_VERSION}/main"
@@ -290,7 +329,32 @@ build_image() {
       ;;
   esac
 
+  local llama_desc
+  llama_desc="repo=$llama_repo branch=$llama_branch"
+  if [[ -n "$llama_ref" ]]; then
+    llama_desc+=" ref=$llama_ref"
+  fi
+  local commit_sha=""
+  local commit_subject=""
+  local commit_url=""
+  if [[ "$DRY_RUN" != "1" ]]; then
+    local resolved
+    resolved="$(resolve_commit "$llama_repo" "${llama_ref:-$llama_branch}" 2>/dev/null)" || resolved=""
+    if [[ -n "$resolved" ]]; then
+      commit_sha="${resolved%%$'\t'*}"
+      commit_subject="${resolved#*$'\t'}"
+      if [[ "$llama_repo" == *github.com/* ]]; then
+        local owner_repo="${llama_repo#*github.com/}"
+        owner_repo="${owner_repo%.git}"
+        commit_url="https://github.com/$owner_repo/commit/$commit_sha"
+      fi
+    fi
+  fi
+  local clickable=0
+  [[ -t 1 ]] && clickable=1
   printf 'Building %s\n' "${tag_args[*]}"
+  printf '  llama.cpp: %s\n' "$llama_desc"
+  print_commit_info "$clickable" "$commit_subject" "$commit_url"
 
   if [[ "$BUILDER" == "buildah" ]]; then
     cmd=("$BUILDER" bud \
@@ -347,10 +411,16 @@ build_image() {
     local log_file
     started_at="$(date +%Y%m%d-%H%M%S)"
     log_file="$BUILD_LOG_DIR/${started_at}-${build_type}-${CPU_TARGET}.log"
+    {
+      printf 'Building %s\n' "${tag_args[*]}"
+      printf '  llama.cpp: %s\n' "$llama_desc"
+      print_commit_info 0 "$commit_subject" "$commit_url"
+      printf 'Full build log: %s\n' "$log_file"
+    } >> "$log_file"
     printf 'Full build log: %s\n' "$log_file"
 
     set +e
-    "${cmd[@]}" 2>&1 | tee "$log_file" | awk '
+    "${cmd[@]}" 2>&1 | tee -a "$log_file" | awk '
       cmake_warning_context > 0 {
         print; fflush();
         cmake_warning_context--;
