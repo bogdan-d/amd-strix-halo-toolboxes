@@ -2,10 +2,13 @@
 
 This is a decision-oriented map for `llama-cli` and `llama-server` arguments.
 It is based on the generated upstream docs for `llama.cpp` `master` as checked
-on 2026-06-01:
+on 2026-06-01, plus later additions verified against source:
 
 - <https://github.com/ggml-org/llama.cpp/blob/master/tools/cli/README.md>
 - <https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md>
+
+`--reasoning-preserve` (merged 2026-06-28, PR #25105) was added after the
+2026-06-01 snapshot and is documented from the merged diff.
 
 Always verify against the exact binary you are running:
 
@@ -71,7 +74,9 @@ The shared runtime/cache defaults come from the global `[*]` section of
 `models-template.ini`: `ctx-size = 262144`, `threads = 16` /
 `threads-batch = 16`, `batch-size = 2048`, `cache-type-k/v = f16`,
 `cache-reuse = 256`, `ctx-checkpoints = 32`, `cache-ram = 65536`, `mmap = off`,
-`metrics = true`, and the base `chat-template-kwargs = {"preserve_thinking": true}`.
+`metrics = true`, and the base `chat-template-kwargs = {"preserve_thinking": true}`
+(this kwarg is kept instead of the newer `--reasoning-preserve` for fork-image
+compatibility; see [Reasoning Preservation](#reasoning-preservation)).
 Every generated section is pinned to a single device via `--device`
 (`Vulkan0` for vulkan backends, `ROCm0` for ROCm; default `ROCm0`). ROCm device
 sections also emit `ubatch-size = 256` (the ROCm microbatch limit); Vulkan
@@ -376,13 +381,47 @@ These affect token choice after the model has produced logits.
 | `--jinja`, `--no-jinja` | both | Use Jinja chat template engine. |
 | `--chat-template` | both | Built-in or inline chat template. |
 | `--chat-template-file` | both | Template file. Useful for `jinja/` experiments. |
-| `--chat-template-kwargs` | both | JSON kwargs passed to template parser. Do not use `enable_thinking` here; current llama.cpp warns to use `--reasoning on/off` instead. |
+| `--chat-template-kwargs` | both | JSON kwargs passed to template parser. Do not use `enable_thinking` here; current llama.cpp warns to use `--reasoning on/off` instead. This is also where this repo sets `preserve_thinking` directly (see below). |
 | `--skip-chat-parsing`, `--no-skip-chat-parsing` | both | Disable structured chat parsing. |
 | `--reasoning-format` | both | How to expose/extract thinking text. |
 | `-rea`, `--reasoning` | both | Enable, disable, or auto-detect reasoning mode. |
 | `--reasoning-budget` | both | Token budget for thinking. |
 | `--reasoning-budget-message` | both | Message inserted when reasoning budget ends. |
+| `--reasoning-preserve`, `--no-reasoning-preserve` | both | Keep the reasoning trace in the full chat history, not just the last assistant message. Maps to the `preserve_reasoning` template kwarg, which sets the Jinja vars `preserve_thinking=true` plus `clear_thinking=false` and `truncate_history_thinking=false`. Default follows the template; env `LLAMA_ARG_REASONING_PRESERVE`. |
 | `--prefill-assistant`, `--no-prefill-assistant` | server | Control assistant-message prefill behavior. |
+
+### Reasoning Preservation
+
+`--reasoning-preserve` only takes effect on templates that advertise the
+`supports_preserve_reasoning` capability. At startup `llama-server` probes the
+template and logs either:
+
+- `consider enabling it via --reasoning-preserve` (INFO) when the template
+  supports preservation but the `preserve_reasoning` kwarg is not set, or
+- `does NOT support preserving reasoning, --reasoning-preserve has no effect`
+  (WARN) when the flag is set on a template that cannot honor it.
+
+This repo's generated presets intentionally keep
+`chat-template-kwargs = {"preserve_thinking": true}` (the global default in
+`models-template.ini`) instead of `reasoning-preserve = on` for two reasons:
+
+1. The ROCmFPX fork images are pinned to a fork commit that predates the flag,
+   so `reasoning-preserve` would be an unknown INI option and would abort fork
+   server starts. The shared template feeds both stock and fork presets, so it
+   cannot carry a fork-incompatible key.
+2. Passing `preserve_thinking` directly is functionally equivalent for
+   templates that honor it and works on every image.
+
+On stock (non-fork) images you may swap the kwarg for `reasoning-preserve = on`
+in a model section. That additionally sets `clear_thinking` and
+`truncate_history_thinking` consistently and silences the spurious INFO hint
+(the server only treats the literal `preserve_reasoning` kwarg as "enabled", so
+the `preserve_thinking` kwarg still triggers the hint even though preservation
+is active). Verify the binary first:
+
+```bash
+bin/run.sh rocm run llama-server --help | grep reasoning-preserve
+```
 
 ## Multimodal and Audio
 
