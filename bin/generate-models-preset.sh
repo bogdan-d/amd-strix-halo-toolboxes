@@ -361,137 +361,6 @@ generic_alias_parts() {
   printf ' [%s]\n' "$size_on_disk"
 }
 
-rocmfpx_alias_quant() {
-  local rel="$1"
-  local stem haystack
-
-  stem="$(filename_stem "$rel")"
-  haystack="$rel"
-  if [[ "$haystack" =~ (Q[3468]_0)_ROCMFP[4X] ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}"
-    return 0
-  fi
-  if [[ "$haystack" =~ (Q[0-9]+_[A-Za-z0-9_]+)_ROCMFP[4Xx] ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}"
-    return 0
-  fi
-  if [[ "$stem" =~ (UD-)?(IQ[0-9]+_[A-Za-z0-9_]+|TQ[0-9]+_[0-9]+|Q[0-9]+_[A-Za-z0-9_]+|BF16|F16|F32|MXFP[0-9]+(_MOE)?)(-to-[Rr][Oo][Cc][Mm][Ff][Pp]([4Xx])|-mtp)?$ ]]; then
-    printf '%s\n' "${BASH_REMATCH[1]}${BASH_REMATCH[2]}"
-    return 0
-  fi
-  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]3 ]]; then
-    printf '%s\n' ROCmFP3
-    return 0
-  fi
-  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]4 ]]; then
-    printf '%s\n' ROCmFP4
-    return 0
-  fi
-  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]6 ]]; then
-    printf '%s\n' ROCmFP6
-    return 0
-  fi
-  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp]8 ]]; then
-    printf '%s\n' ROCmFP8
-    return 0
-  fi
-  if [[ "$haystack" =~ [Rr][Oo][Cc][Mm][Ff][Pp][Xx] ]]; then
-    printf '%s\n' ROCmFPX
-  fi
-}
-
-rocmfpx_alias_model_name() {
-  local rel="$1"
-  local stem base_name_re first second rest
-
-  case "$rel" in
-    *Nex-N2-mini-ROCmFP4*|*nex-n2-mini-rocmfp4*|*Nex-N2-mini-ROCmFPX*|*nex-n2-mini-rocmfpx*)
-      printf '%s\n' Nex-N2-mini
-      return 0
-      ;;
-    *chadrock-35b-ace-saber-rocmfp4-mtp*|*Qwen3.6-35B-A3B-NSC-ACE-SABER-MTP-F16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' Chadrock3.6-35B-A3B-ACE-SABER
-      return 0
-      ;;
-    *CHADROCK3.6-35B-UNCENSORED-MTP-STRIX-LEAN*|*chadrock3.6-35b-uncensored-mtp-strix-lean*)
-      printf '%s\n' Chadrock3.6-35B
-      return 0
-      ;;
-    *qwopus3.6-27b-v2-chadrock-rocmfp4-mtp*|*Qwopus3.6-27B-v2-MTP-BF16-to-ROCmFP4-STRIX_LEAN*)
-      printf '%s\n' Qwopus3.6-27B-v2-Chadrock
-      return 0
-      ;;
-    *Qwopus3.6-27B-v2-MTP-Q4_0_ROCMFP4*|*qwopus3.6-27b-v2-mtp-q4_0_rocmfp4*)
-      printf '%s\n' Qwopus3.6-27B-v2
-      return 0
-      ;;
-    *Qwopus3.6-35B-A3B-v1-MTP-Q4_0_ROCMFP4*|*qwopus3.6-35b-a3b-v1-mtp-q4_0_rocmfp4*)
-      printf '%s\n' Qwopus3.6-35B-A3B-v1
-      return 0
-      ;;
-  esac
-
-  stem="$(filename_stem "$rel")"
-  IFS=/ read -r first second rest <<< "$rel"
-  if [[ "$stem" =~ ^[Mm][Oo][Dd][Ee][Ll](-[0-9]+)?$ && -n "${second:-}" ]]; then
-    stem="$second"
-  fi
-  base_name_re='(^|[-_/])((Qwen|Qwopus|Chadrock|Nex|DeepSeek|Llama|Mistral|Mixtral|Gemma|Phi)[A-Za-z0-9.]*[-_][0-9]+(\.[0-9]+)?[Bb]([-_][A-Za-z][0-9]+[Bb])?([-_][Vv][0-9]+)?)'
-  if [[ "$stem" =~ $base_name_re ]]; then
-    printf '%s\n' "${BASH_REMATCH[2]//_/-}"
-    return 0
-  fi
-
-  stem="$(printf '%s\n' "$stem" | sed -E \
-    -e 's/[-_][Gg][Gg][Uu][Ff]$//' \
-    -e 's/[-_]?[Ss][Tt][Rr][Ii][Xx][_-]?(LEAN|SPEED|QUALITY)$//' \
-    -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp][Xx]$//' \
-    -e 's/[-_]?[Rr][Oo][Cc][Mm][Ff][Pp][3468]$//' \
-    -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp][Xx]$//' \
-    -e 's/[-_]?(BF16|F16|F32|Q[0-9]+_[A-Za-z0-9_]+)-to-[Rr][Oo][Cc][Mm][Ff][Pp][3468]$//' \
-    -e 's/[-_]?Q[3468]_0_[Rr][Oo][Cc][Mm][Ff][Pp]([Xx]|4)(_AGENT)?$//' \
-    -e 's/[-_]?Q6_0_[Rr][Oo][Cc][Mm][Ff][Pp][Xx]_[Ss][Tt][Rr][Ii][Xx]_(LEAN|SPEED|QUALITY)$//' \
-    -e 's/(^|[-_])[Mm][Tt][Pp]($|[-_])/-/g' \
-    -e 's/(^|[-_])[Aa][Gg][Ee][Nn][Tt]($|[-_])/-/g' \
-    -e 's/(^|[-_])[Uu][Nn][Cc][Ee][Nn][Ss][Oo][Rr][Ee][Dd]($|[-_])/-/g' \
-    -e 's/(^|[-_])[Uu][Nn][Cc]($|[-_])/-/g' \
-    -e 's/-+/-/g; s/_+/-/g; s/^-+//; s/-+$//')"
-  printf '%s\n' "$stem"
-}
-
-format_model_alias() {
-  local model_name="$1"
-  local author="$2"
-  local moe="$3"
-  local mtp="$4"
-  local uncensored="$5"
-  local quant="$6"
-  shift 6
-  local tags=("$@")
-  local alias="$model_name"
-  local tag
-
-  if (( moe )); then
-    alias+=" [MOE]"
-  fi
-  if (( mtp )); then
-    alias+=" [MTP]"
-  fi
-  if (( uncensored )); then
-    alias+=" [UNC]"
-  fi
-  if [[ -n "$quant" ]]; then
-    alias+=" [$quant]"
-  fi
-  for tag in "${tags[@]}"; do
-    if [[ -n "$tag" ]]; then
-      alias+=" [$tag]"
-    fi
-  done
-  alias+=" ($author)"
-  printf '%s\n' "$alias"
-}
-
 unique_alias() {
   local alias="$1"
   local rel="$2"
@@ -524,40 +393,6 @@ unique_alias() {
   done
 
   printf '%s\n' "$candidate"
-}
-
-rocmfpx_alias() {
-  local rel="$1"
-  shift
-  local model_name author quant moe mtp uncensored extra_tags
-
-  model_name="$(rocmfpx_alias_model_name "$rel")"
-  author="$(model_author "$rel")"
-  quant="$(rocmfpx_alias_quant "$rel")"
-  moe=0
-  if is_moe_model "$rel"; then
-    moe=1
-  fi
-  mtp=0
-  if is_mtp_model "$rel"; then
-    mtp=1
-  fi
-  uncensored=0
-  if is_uncensored_model "$rel"; then
-    uncensored=1
-  fi
-  extra_tags=()
-  if is_imatrix_model "$rel"; then
-    extra_tags+=(imatrix)
-  fi
-
-  format_model_alias "$model_name" "$author" "$moe" "$mtp" "$uncensored" "$quant" "${extra_tags[@]}" "$@"
-}
-
-crown_halo_mtp_dynamic_alias() {
-  local rel="$1"
-  shift
-  format_model_alias "Qwen3.6-35B-A3B-Crown-Halo-Dynamic" "$(model_author "$rel")" 1 1 0 "" "$@"
 }
 
 emit_model_section() {
@@ -641,11 +476,12 @@ emit_crown_halo_mtp_dynamic_variants() {
   local model_path="$2"
   local rel="$3"
   local moe="${4:-0}"
+  local host_file="${5:?host_file required}"
   local reasoning_alias non_reasoning_alias
 
-  reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel")" "$rel")"
+  reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 0 0)" "$rel")"
   seen_aliases[$reasoning_alias]=1
-  non_reasoning_alias="$(unique_alias "$(crown_halo_mtp_dynamic_alias "$rel" non-reasoning)" "$rel")"
+  non_reasoning_alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 1 1 0)" "$rel")"
   seen_aliases[$non_reasoning_alias]=1
 
   emit_crown_halo_mtp_dynamic_section "$id~mtp" "$model_path" on "$reasoning_alias" "$moe"
@@ -841,14 +677,14 @@ while IFS= read -r host_file; do
   fi
 
   if is_crown_halo_mtp_dynamic_model "$rel"; then
-    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" "$rel" "$moe" >> "$tmp_output"
+    emit_crown_halo_mtp_dynamic_variants "$id" "$model_path" "$rel" "$moe" "$host_file" >> "$tmp_output"
     model_count=$((model_count + 1))
     continue
   fi
 
   if is_rocmfpx_llamacpp_model "$rel"; then
     if is_nex_n2_mini_rocmfpx_model "$rel"; then
-      alias="$(unique_alias "$(rocmfpx_alias "$rel")" "$rel")"
+      alias="$(unique_alias "$(generic_alias_parts "$host_file" "$rel" 0 0 0)" "$rel")"
       seen_aliases[$alias]=1
       emit_nex_n2_mini_rocmfpx_section "$id" "$model_path" "$alias" >> "$tmp_output"
       model_count=$((model_count + 1))

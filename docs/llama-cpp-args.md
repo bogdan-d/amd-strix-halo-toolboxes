@@ -60,7 +60,7 @@ model-card exception to the shared defaults: they keep `ctx-size = 131072`,
 `ubatch-size = 512` directly in the model sections.
 The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model, with display aliases such as
-`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)`.
+`[jcbtc] Qwen3.6-HaloStrix-Dyn-v7 [35B / A3B] [MTP] [21G]`.
 
 Regardless of family or variant, MoE models (architectures like `A3B`/`A14B`
 or names containing `MoE`) override `spec-draft-n-max = 2`; dense models keep

@@ -189,9 +189,9 @@ of `--with-non-reasoning`: `~mtp` with reasoning enabled and
 `~mtp~non-reasoning` with reasoning disabled. Both routes keep the model-card
 profile in the model section itself: 131072 context, row split, `f16/f16` main
 and draft KV, `draft-mtp` depth 2, single-slot serving, Strix polling, and
-`b2048/u512`. The routes use generated display aliases, for example
-`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] (jcbtc)` and
-`Qwen3.6-35B-A3B-Crown-Halo-Dynamic [MOE] [MTP] [non-reasoning] (jcbtc)`,
+`b2048/u512`. The routes use the shared generated display-alias pattern, for example
+`[jcbtc] Qwen3.6-HaloStrix-Dyn-v7 [35B / A3B] [MTP] [21G]` and
+`[jcbtc] Qwen3.6-HaloStrix-Dyn-v7 [35B / A3B] [MTP] [NO-THINK] [21G]`,
 so the router can load both presets without alias collisions.
 
 Generated presets are text-only by default, even when a same-directory
