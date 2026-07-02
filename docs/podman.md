@@ -279,8 +279,14 @@ The generator writes:
 
 - `coding-tool-configs/kilocode/kilo.jsonc`
 - `coding-tool-configs/opencode/opencode.jsonc`
-- `coding-tool-configs/pi/models.json`
 - `coding-tool-configs/vscode/chatLanguageModels.json`
+
+Which targets are emitted is declared in the
+`coding-tool-configs.manifest.json` manifest at the repo root. The `pi` target
+is listed there but disabled (`"enabled": false`), so
+`coding-tool-configs/pi/models.json` is not regenerated; its builder is retained
+and the target is re-enabled by flipping the flag in the manifest. Point the
+generator at another manifest with `--manifest <path>`.
 
 Apply those generated configs to existing user config files manually with:
 

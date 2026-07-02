@@ -1,0 +1,21 @@
+{
+  "configs": {
+    "kilocode": {
+      "output": "kilocode/kilo.jsonc",
+      "enabled": true
+    },
+    "opencode": {
+      "output": "opencode/opencode.jsonc",
+      "enabled": true
+    },
+    "pi": {
+      "output": "pi/models.json",
+      "enabled": false,
+      "disabledReason": "Disabled by default; the pi builder is retained so this target can be re-enabled here."
+    },
+    "vscode": {
+      "output": "vscode/chatLanguageModels.json",
+      "enabled": true
+    }
+  }
+}

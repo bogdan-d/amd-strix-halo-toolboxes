@@ -2,6 +2,7 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 type IniSection = {
   name: string;
@@ -26,6 +27,7 @@ type Options = {
   maxOutputTokens: number;
   defaultContext: number;
   toolCalling: boolean;
+  manifest: string;
 };
 
 const DEFAULT_BASE_URL = "http://127.0.0.1:8080/v1";
@@ -33,6 +35,9 @@ const DEFAULT_CONTEXT = 262144;
 const DEFAULT_MAX_OUTPUT_TOKENS = 32768;
 const SMALL_CONTEXT_THRESHOLD = 100000;
 const SMALL_CONTEXT_MAX_OUTPUT_TOKENS = 16384;
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = dirname(SCRIPT_DIR);
+const DEFAULT_MANIFEST = join(REPO_ROOT, "coding-tool-configs.manifest.json");
 
 function usage(exitCode = 0): never {
   const stream = exitCode === 0 ? process.stdout : process.stderr;
@@ -46,14 +51,12 @@ Options:
   --base-url <url>          OpenAI-compatible endpoint. Default: ${DEFAULT_BASE_URL}
   --max-output-tokens <n>   Default model output budget. Default: ${DEFAULT_MAX_OUTPUT_TOKENS}
   --default-context <n>     Fallback total context when the INI has no ctx-size. Default: ${DEFAULT_CONTEXT}
+  --manifest <path>         Config manifest declaring targets and enabled state. Default: ${DEFAULT_MANIFEST}
   --no-tool-calling         Mark generated models as not tool-call capable
   -h, --help                Show this help
 
-Outputs:
-  <root>/kilocode/kilo.jsonc
-  <root>/opencode/opencode.jsonc
-  <root>/pi/models.json
-  <root>/vscode/chatLanguageModels.json
+Outputs are driven by the manifest. Each enabled config writes one file under
+<output-root> at the path declared in the manifest; disabled configs are skipped.
 `);
   process.exit(exitCode);
 }
@@ -77,6 +80,7 @@ function parseArgs(argv: string[]): Options {
   let maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
   let defaultContext = DEFAULT_CONTEXT;
   let toolCalling = true;
+  let manifest = DEFAULT_MANIFEST;
   let preset: string | undefined;
 
   for (let i = 0; i < argv.length; i += 1) {
@@ -96,6 +100,9 @@ function parseArgs(argv: string[]): Options {
         break;
       case "--default-context":
         defaultContext = parsePositiveInteger(requireValue(argv, ++i, arg), arg);
+        break;
+      case "--manifest":
+        manifest = requireValue(argv, ++i, arg);
         break;
       case "--no-tool-calling":
         toolCalling = false;
@@ -123,6 +130,7 @@ function parseArgs(argv: string[]): Options {
     maxOutputTokens,
     defaultContext,
     toolCalling,
+    manifest,
   };
 }
 
@@ -391,6 +399,114 @@ function buildVsCodeConfig(models: ModelInfo[], baseUrl: string) {
   ];
 }
 
+type ManifestConfig = {
+  output: string;
+  enabled: boolean;
+  disabledReason?: string;
+};
+
+type Manifest = {
+  configs: Record<string, ManifestConfig>;
+};
+
+type ConfigBuilder = (models: ModelInfo[], baseUrl: string) => unknown;
+
+// Each key maps a manifest entry to the function that builds that tool's config.
+// The manifest is the single source of truth for which targets are emitted; a
+// builder with no manifest entry (or vice versa) is a hard error so config drift
+// is caught at generation time.
+const CONFIG_BUILDERS: Record<string, ConfigBuilder> = {
+  kilocode: buildKiloConfig,
+  opencode: buildOpencodeConfig,
+  pi: buildPiConfig,
+  vscode: buildVsCodeConfig,
+};
+
+async function loadManifest(path: string): Promise<Manifest> {
+  const raw = await readFile(path, "utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to parse manifest ${path}: ${message}`);
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Manifest ${path} must be a JSON object`);
+  }
+
+  const configs = (parsed as { configs?: unknown }).configs;
+  if (typeof configs !== "object" || configs === null || Array.isArray(configs)) {
+    throw new Error(`Manifest ${path} must have a "configs" object`);
+  }
+
+  const result: Record<string, ManifestConfig> = {};
+  for (const [key, entry] of Object.entries(configs as Record<string, unknown>)) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error(`Manifest ${path}: config "${key}" must be an object`);
+    }
+
+    const fields = entry as Record<string, unknown>;
+    const { output, enabled, disabledReason } = fields;
+
+    if (typeof output !== "string" || output.length === 0) {
+      throw new Error(`Manifest ${path}: config "${key}" needs a non-empty string "output"`);
+    }
+    if (output.split(/[\\/]/).includes("..")) {
+      throw new Error(
+        `Manifest ${path}: config "${key}" output must not escape the output root: ${output}`,
+      );
+    }
+    if (typeof enabled !== "boolean") {
+      throw new Error(`Manifest ${path}: config "${key}" needs a boolean "enabled"`);
+    }
+    if (disabledReason !== undefined && typeof disabledReason !== "string") {
+      throw new Error(`Manifest ${path}: config "${key}" "disabledReason" must be a string`);
+    }
+
+    result[key] = {
+      output,
+      enabled,
+      ...(disabledReason !== undefined ? { disabledReason: disabledReason } : {}),
+    };
+  }
+
+  return { configs: result };
+}
+
+function validateManifest(manifest: Manifest): void {
+  const builderKeys = new Set(Object.keys(CONFIG_BUILDERS));
+  const manifestKeys = new Set(Object.keys(manifest.configs));
+
+  const missingFromManifest = [...builderKeys].filter((key) => !manifestKeys.has(key));
+  if (missingFromManifest.length > 0) {
+    throw new Error(
+      `Manifest is missing entries for builders without a target: ${missingFromManifest.join(", ")}`,
+    );
+  }
+
+  const unknownInManifest = [...manifestKeys].filter((key) => !builderKeys.has(key));
+  if (unknownInManifest.length > 0) {
+    throw new Error(
+      `Manifest declares configs without a matching builder: ${unknownInManifest.join(", ")}`,
+    );
+  }
+
+  const enabledOutputs = new Set<string>();
+  for (const [key, cfg] of Object.entries(manifest.configs)) {
+    if (!cfg.enabled) {
+      continue;
+    }
+    if (enabledOutputs.has(cfg.output)) {
+      throw new Error(
+        `Manifest has multiple enabled configs writing to the same output: ${cfg.output} (config "${key}")`,
+      );
+    }
+    enabledOutputs.add(cfg.output);
+  }
+}
+
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
@@ -407,12 +523,25 @@ async function main(): Promise<void> {
     throw new Error(`No model sections found in ${presetPath}`);
   }
 
-  await writeJson(join(outputRoot, "kilocode", "kilo.jsonc"), buildKiloConfig(models, options.baseUrl));
-  await writeJson(join(outputRoot, "opencode", "opencode.jsonc"), buildOpencodeConfig(models, options.baseUrl));
-  await writeJson(join(outputRoot, "pi", "models.json"), buildPiConfig(models, options.baseUrl));
-  await writeJson(join(outputRoot, "vscode", "chatLanguageModels.json"), buildVsCodeConfig(models, options.baseUrl));
+  const manifest = await loadManifest(resolve(options.manifest));
+  validateManifest(manifest);
 
-  process.stdout.write(`Generated ${models.length} model entries under ${outputRoot}\n`);
+  let written = 0;
+  let skipped = 0;
+  for (const [key, cfg] of Object.entries(manifest.configs)) {
+    if (!cfg.enabled) {
+      const reason = cfg.disabledReason ? ` (${cfg.disabledReason})` : "";
+      process.stdout.write(`Skipping disabled config "${key}" -> ${cfg.output}${reason}\n`);
+      skipped += 1;
+      continue;
+    }
+    await writeJson(join(outputRoot, cfg.output), CONFIG_BUILDERS[key](models, options.baseUrl));
+    written += 1;
+  }
+
+  process.stdout.write(
+    `Wrote ${written} config target(s) for ${models.length} model(s); skipped ${skipped} disabled target(s) under ${outputRoot}\n`,
+  );
 }
 
 main().catch((error: unknown) => {
