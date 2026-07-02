@@ -285,8 +285,11 @@ Which targets are emitted is declared in the
 `coding-tool-configs.manifest.json` manifest at the repo root. The `pi` target
 is listed there but disabled (`"enabled": false`), so
 `coding-tool-configs/pi/models.json` is not regenerated; its builder is retained
-and the target is re-enabled by flipping the flag in the manifest. Point the
-generator at another manifest with `--manifest <path>`.
+and the target is re-enabled by flipping the flag in the manifest. On each run
+the generator also prunes stale outputs left over from a previously enabled
+target (the file plus any directories it leaves empty), so `coding-tool-configs/`
+stays consistent with the manifest. Point the generator at another manifest with
+`--manifest <path>`.
 
 Apply those generated configs to existing user config files manually with:
 
@@ -294,8 +297,11 @@ Apply those generated configs to existing user config files manually with:
 bin/update-user-configs.ts
 ```
 
-The copy script skips tools whose user config file does not already exist. It
-updates VS Code, VS Code Insiders, Pi, Kilo Code, and OpenCode configs; for
+The copy script skips tools whose user config file does not already exist, and
+it honors the same `coding-tool-configs.manifest.json` manifest: a target
+disabled there is never merged into its user config, even if a stale generated
+file remains from a previous run. By default it therefore updates VS Code, VS
+Code Insiders, Kilo Code, and OpenCode, and skips the disabled Pi target; for
 OpenCode it prefers `~/.config/opencode/opencode.jsonc`, then falls back to
 `~/.config/opencode/opencode.json`. Use `--base-home <dir>` to test against a
 temporary home-shaped directory without touching real user configs.

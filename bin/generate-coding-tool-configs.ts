@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { mkdir, readFile, rm, rmdir, stat, writeFile } from "node:fs/promises";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type IniSection = {
@@ -512,6 +512,39 @@ async function writeJson(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
 }
 
+// Remove a stale generated file left over from when a config was enabled, plus
+// any directories it leaves empty (up to, but never including, the output root).
+// Keeps the generated tree consistent with the manifest without touching shared
+// directories that still hold other enabled outputs.
+async function pruneStaleOutput(outputRoot: string, rel: string): Promise<boolean> {
+  const filePath = join(outputRoot, rel);
+  let existed = false;
+  try {
+    await stat(filePath);
+    existed = true;
+  } catch {
+    existed = false;
+  }
+  if (!existed) {
+    return false;
+  }
+
+  await rm(filePath, { force: true });
+
+  const rootPrefix = `${outputRoot}${sep}`;
+  let dir = dirname(filePath);
+  while (dir.startsWith(rootPrefix) && dir !== outputRoot) {
+    try {
+      await rmdir(dir);
+    } catch {
+      break;
+    }
+    dir = dirname(dir);
+  }
+
+  return true;
+}
+
 async function main(): Promise<void> {
   const options = parseArgs(Bun.argv.slice(2));
   const presetPath = resolve(options.preset);
@@ -531,7 +564,9 @@ async function main(): Promise<void> {
   for (const [key, cfg] of Object.entries(manifest.configs)) {
     if (!cfg.enabled) {
       const reason = cfg.disabledReason ? ` (${cfg.disabledReason})` : "";
-      process.stdout.write(`Skipping disabled config "${key}" -> ${cfg.output}${reason}\n`);
+      const pruned = await pruneStaleOutput(outputRoot, cfg.output);
+      const action = pruned ? `Removed stale output for disabled config` : `Skipping disabled config`;
+      process.stdout.write(`${action} "${key}" -> ${cfg.output}${reason}\n`);
       skipped += 1;
       continue;
     }
