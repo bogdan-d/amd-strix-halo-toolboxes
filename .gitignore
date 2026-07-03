@@ -1,5 +1,6 @@
 .env
 /models
+/temp
 .build-logs/
 coding-tool-configs/
 __pycache__
