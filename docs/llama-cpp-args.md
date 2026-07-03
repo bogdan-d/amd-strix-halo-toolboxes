@@ -62,6 +62,10 @@ The generator always emits both reasoning-on and reasoning-off MTP routes for
 that model, with display aliases such as
 `[jcbtc] Qwen3.6-HaloStrix-Dyn-v7 [35B / A3B] [MTP] [21G]`.
 
+Crown Halo GGUFs are quantized for the ROCmFPX fork runtime only, so the
+generator routes them into the `--rocmfpx-only` preset and excludes them from
+the stock image even though their filename carries no `ROCmFPX` token.
+
 Regardless of family or variant, MoE models (architectures like `A3B`/`A14B`
 or names containing `MoE`) override `spec-draft-n-max = 2`; dense models keep
 their family default (3 for generic n-gram MTP, 5 for ROCmFPX MTP). Crown Halo

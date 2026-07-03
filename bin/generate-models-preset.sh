@@ -200,7 +200,8 @@ is_rocmfpx_llamacpp_model() {
   local rel="$1"
   [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp][Xx] ]] ||
     [[ "$rel" =~ [Rr][Oo][Cc][Mm][Ff][Pp][3468] ]] ||
-    [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]]
+    [[ "$rel" =~ [Cc][Hh][Aa][Dd][Rr][Oo][Cc][Kk]3\.6-35[Bb]-UNCENSORED-MTP-STRIX-LEAN ]] ||
+    is_crown_halo_mtp_dynamic_model "$rel"
 }
 
 is_qwopus_27b_coder_rocmfpx_model() {
