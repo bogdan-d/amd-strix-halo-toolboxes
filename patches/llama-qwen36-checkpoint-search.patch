@@ -1,0 +1,24 @@
+Qwen3.6 hybrid/recurrent checkpoint search fix.
+
+Source: Reddit r/LocalLLM post 1ullrvq / Pastebin jyrhvesQ.
+Upstream refs: ggml-org/llama.cpp#22384, #20225, #24055.
+
+For hybrid/recurrent models, use checkpoint `pos_max <= pos_next` as the
+restoreability test instead of rejecting by `pos_min`. This is intended to
+reduce repeated `forcing full prompt re-processing due to lack of cache data`
+turns on Qwen3.6-style hybrid/recurrent memory.
+
+diff --git a/tools/server/server-context.cpp b/tools/server/server-context.cpp
+index 20e9325..1420ec2 100644
+--- a/tools/server/server-context.cpp
++++ b/tools/server/server-context.cpp
+@@ -3312,6 +3312,9 @@ private:
+                                             if (cur.pos_max > pos_next) {
+                                                 return false;
+                                             }
++                                            if (llama_model_is_recurrent(model_tgt) || llama_model_is_hybrid(model_tgt)) {
++                                                return cur.pos_max <= pos_next;
++                                            }
+                                             return cur.pos_min < pos_min_thold || cur.pos_min == 0;
+                                         }
+                                     );

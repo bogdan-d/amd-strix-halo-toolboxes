@@ -160,6 +160,8 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY patches/llama-grammar.patch /tmp/llama-grammar.patch
+COPY patches/llama-qwen36-checkpoint-search.patch /tmp/llama-qwen36-checkpoint-search.patch
+COPY patches/llama-qwen36-recurrent-prompt-cache.patch /tmp/llama-qwen36-recurrent-prompt-cache.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
 RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
@@ -177,6 +179,8 @@ RUN --mount=type=cache,id=llama-source,target=/opt/llama.cpp \
   fi \
   && git submodule update --init --recursive \
   && patch -p1 < /tmp/llama-grammar.patch \
+  && patch -p1 < /tmp/llama-qwen36-checkpoint-search.patch \
+  && patch -p1 < /tmp/llama-qwen36-recurrent-prompt-cache.patch \
   && sed -i \
     's@^#define DEFAULT_INTERPOLATION_MODE (GGML_SCALE_MODE_BILINEAR | GGML_SCALE_FLAG_ANTIALIAS)$@#define DEFAULT_INTERPOLATION_MODE (uint32_t(GGML_SCALE_MODE_BILINEAR) | uint32_t(GGML_SCALE_FLAG_ANTIALIAS))@' \
     tools/mtmd/clip-graph.h \

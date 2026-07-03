@@ -623,6 +623,27 @@ llama-server \
 
 Compare `--spec-draft-n-max 2` and `3`; larger is not automatically faster.
 
+For a Reddit-sourced Qwen3.6 27B Q6_K / RTX 5090 comparison profile, test pure
+MTP without the n-gram sidecar and with the reported deeper draft threshold:
+
+```bash
+LLAMA_CONTEXT=196608 \
+LLAMA_BATCH=512 \
+LLAMA_UBATCH=512 \
+LLAMA_SPEC_DRAFT_N_MAX=10 \
+LLAMA_SPEC_DRAFT_P_MIN=0.5 \
+LLAMA_MTP_NGRAM=0 \
+bin/run.sh vulkan mtp-server /path/to/Qwen3.6-27B-MTP-Q6_K.gguf \
+  --cache-ram 32768 --ctx-checkpoints 8 --checkpoint-min-step 256 \
+  -ctk q8_0 -ctv q8_0 --kv-unified \
+  --reasoning on --reasoning-budget 16384
+```
+
+Compare against this repo's default MTP helper (`LLAMA_MTP_NGRAM=1`, depth 3)
+and Unsloth's published guidance to sweep depths 1-6. Treat depth 10 and
+`--spec-draft-p-min 0.5` as hardware/profile-specific until measured on Strix
+Halo.
+
 ### Deterministic Debugging
 
 ```bash

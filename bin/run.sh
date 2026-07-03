@@ -61,6 +61,11 @@ Environment:
   LLAMA_NGL             GPU layers to offload. Default: 999
   LLAMA_BENCH_NGL       GPU layers for llama-bench. Default: 99
   LLAMA_PREDICT         Default CLI prediction tokens. Default: -1
+  LLAMA_SPEC_DRAFT_N_MAX
+                        Default mtp-server draft depth. Default: 3
+  LLAMA_SPEC_DRAFT_P_MIN
+                        Optional mtp-server --spec-draft-p-min value.
+  LLAMA_MTP_NGRAM       Add ngram-map-k4v sidecar to mtp-server. Default: 1
   LLAMA_LOAD_TEST_TIMEOUT
                         Seconds to wait for load-test. Default: 120
   HF_CACHE_DIR          Host Hugging Face cache directory. Default: ~/.cache/huggingface
@@ -346,6 +351,8 @@ LLAMA_UBATCH="${LLAMA_UBATCH:-$DEFAULT_UBATCH}"
 LLAMA_NGL="${LLAMA_NGL:-999}"
 LLAMA_BENCH_NGL="${LLAMA_BENCH_NGL:-99}"
 LLAMA_PREDICT="${LLAMA_PREDICT:--1}"
+LLAMA_SPEC_DRAFT_N_MAX="${LLAMA_SPEC_DRAFT_N_MAX:-3}"
+LLAMA_MTP_NGRAM="${LLAMA_MTP_NGRAM:-1}"
 LLAMA_LOAD_TEST_TIMEOUT="${LLAMA_LOAD_TEST_TIMEOUT:-120}"
 HF_CACHE_DIR="${HF_CACHE_DIR:-$HOME/.cache/huggingface}"
 HF_HOME="${HF_HOME:-/root/.cache/huggingface}"
@@ -738,11 +745,33 @@ case "$ACTION" in
     require_model "$@"
     MODEL="$(container_model_path "$1")"
     shift
-    DRAFT_N="3"
+    DRAFT_N="$LLAMA_SPEC_DRAFT_N_MAX"
     if [[ $# -gt 0 && "$1" =~ ^[0-9]+$ ]]; then
       DRAFT_N="$1"
       shift
     fi
+    SPEC_ARGS=(
+      --spec-type draft-mtp
+      --spec-draft-n-max "$DRAFT_N"
+    )
+    if [[ -n "${LLAMA_SPEC_DRAFT_P_MIN:-}" ]]; then
+      SPEC_ARGS+=(--spec-draft-p-min "$LLAMA_SPEC_DRAFT_P_MIN")
+    fi
+    case "$LLAMA_MTP_NGRAM" in
+      0|false|False|FALSE|no|No|NO|off|Off|OFF) ;;
+      1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+        SPEC_ARGS+=(
+          --spec-type ngram-map-k4v
+          --spec-ngram-map-k4v-size-n 16
+          --spec-ngram-map-k4v-size-m 24
+          --spec-ngram-map-k4v-min-hits 2
+        )
+        ;;
+      *)
+        echo "Unsupported LLAMA_MTP_NGRAM: $LLAMA_MTP_NGRAM" >&2
+        exit 1
+        ;;
+    esac
     mapfile -t PODMAN_RUN_ARGS < <(container_name_args)
     PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
     base_run llama-server \
@@ -755,12 +784,7 @@ case "$ACTION" in
       -ngl "$LLAMA_NGL" \
       -fa 1 \
       --no-mmap \
-      --spec-type draft-mtp \
-      --spec-draft-n-max "$DRAFT_N" \
-      --spec-type ngram-map-k4v \
-      --spec-ngram-map-k4v-size-n 16 \
-      --spec-ngram-map-k4v-size-m 24 \
-      --spec-ngram-map-k4v-min-hits 2 \
+      "${SPEC_ARGS[@]}" \
       -np 1 \
       "$@"
     ;;

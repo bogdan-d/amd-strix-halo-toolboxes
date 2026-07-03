@@ -361,9 +361,15 @@ tarballs, and llama.cpp checkouts. Stock and ROCmFPX builds use separate
 llama.cpp source caches so the fork branch does not churn the stock worktree.
 They build only the runtime targets: `llama-server`,
 `llama-cli`, `llama-bench`, `llama-gguf-split`, and `llama-quantize`. They also copy the
-grammar patch from `patches/` and the VRAM estimator from `scripts/`. Each build resets the cached
-llama.cpp worktree before switching refs and applying local patches, so dirty
-source files left by one backend do not break the next backend build.
+grammar patch, the Qwen3.6 hybrid/recurrent prompt-cache patches from
+`patches/`, and the VRAM estimator from `scripts/`. The Qwen3.6 patches are
+always applied and fail the build if they stop matching the pinned source tree:
+`llama-qwen36-checkpoint-search.patch` is shared by stock and ROCmFPX builds,
+`llama-qwen36-recurrent-prompt-cache.patch` is for stock llama.cpp, and
+`llama-qwen36-recurrent-prompt-cache-rocmfpx.patch` is adapted to the ROCmFPX
+fork. Each build resets the cached llama.cpp worktree before switching refs and
+applying local patches, so dirty source files left by one backend do not break
+the next backend build.
 
 `rocm-next` and `rocm-next-fpx` copy the pinned TheRock ROCm runtime from the
 builder stage. The runtime images keep `/opt/rocm/share`, register

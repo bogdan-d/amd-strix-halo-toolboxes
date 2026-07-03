@@ -172,6 +172,8 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   test -d .git || git clone -b "${LLAMA_BRANCH}" --single-branch --recursive "${LLAMA_REPO}" .
 
 COPY patches/llama-grammar.patch /tmp/llama-grammar.patch
+COPY patches/llama-qwen36-checkpoint-search.patch /tmp/llama-qwen36-checkpoint-search.patch
+COPY patches/llama-qwen36-recurrent-prompt-cache-rocmfpx.patch /tmp/llama-qwen36-recurrent-prompt-cache-rocmfpx.patch
 COPY containers/rocmfpx-warning.patch /tmp/rocmfpx-warning.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
@@ -190,6 +192,8 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   fi \
   && git submodule update --init --recursive \
   && (patch -p1 < /tmp/llama-grammar.patch || grep -q '#define MAX_REPETITION_THRESHOLD 100000' src/llama-grammar.cpp) \
+  && patch -p1 < /tmp/llama-qwen36-checkpoint-search.patch \
+  && patch -p1 < /tmp/llama-qwen36-recurrent-prompt-cache-rocmfpx.patch \
   && (patch --forward -p1 < /tmp/rocmfpx-warning.patch || \
     (awk '/case LLM_ARCH_STEP35:/,/return LLAMA_ROPE_TYPE_NEOX/' src/llama-model.cpp | grep -q 'case LLM_ARCH_TALKIE:' \
       && grep -q 'case GGML_TYPE_TURBO3_0:' ggml/src/ggml-cpu/ops.cpp \

@@ -352,7 +352,36 @@ bin/run.sh rocm mtp-server \
   3
 ```
 
-The `3` means `--spec-draft-n-max 3`. Use `2` for MTP-2.
+The `3` means `--spec-draft-n-max 3`. Use `2` for MTP-2. The default can also
+come from `LLAMA_SPEC_DRAFT_N_MAX`; `LLAMA_SPEC_DRAFT_P_MIN` adds
+`--spec-draft-p-min`, and `LLAMA_MTP_NGRAM=0` disables the helper's
+`ngram-map-k4v` sidecar so the run uses pure native MTP.
+
+Reddit-style Qwen3.6 27B Q6_K comparison profile, adapted to this helper:
+
+```bash
+LLAMA_CONTEXT=196608 \
+LLAMA_BATCH=512 \
+LLAMA_UBATCH=512 \
+LLAMA_SPEC_DRAFT_N_MAX=10 \
+LLAMA_SPEC_DRAFT_P_MIN=0.5 \
+LLAMA_MTP_NGRAM=0 \
+bin/run.sh vulkan mtp-server \
+  /var/mnt/xdata/models/Qwen3.6-27B-MTP-Q6_K.gguf \
+  --cache-ram 32768 \
+  --ctx-checkpoints 8 \
+  --checkpoint-min-step 256 \
+  -ctk q8_0 -ctv q8_0 --kv-unified \
+  --reasoning on --reasoning-budget 16384 \
+  --temp 0.6 --top-k 20 --top-p 0.95 --min-p 0.0 \
+  --presence-penalty 0.0 --repeat-penalty 1.0 \
+  --metrics --perf
+```
+
+Use this as an experiment, not a default: the source report was CUDA/RTX 5090
+specific, single-slot (`--parallel 1`), and VRAM-limited. ROCmFPX currently does
+not expose `--checkpoint-min-step`; omit that flag for `*-fpx` runs unless the
+fork grows support.
 
 The server listens on port `8080` by default. Override it with:
 
