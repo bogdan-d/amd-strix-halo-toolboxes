@@ -174,7 +174,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
 COPY patches/llama-grammar.patch /tmp/llama-grammar.patch
 COPY patches/llama-qwen36-checkpoint-search.patch /tmp/llama-qwen36-checkpoint-search.patch
 COPY patches/llama-qwen36-recurrent-prompt-cache-rocmfpx.patch /tmp/llama-qwen36-recurrent-prompt-cache-rocmfpx.patch
-COPY containers/rocmfpx-warning.patch /tmp/rocmfpx-warning.patch
+COPY patches/rocmfpx-warning.patch /tmp/rocmfpx-warning.patch
 
 # GCC 16 warns when llama.cpp ORs the different mtmd interpolation enum types.
 RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
