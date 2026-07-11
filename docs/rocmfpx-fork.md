@@ -5,6 +5,10 @@ by the `vulkan-fpx`, `rocm-fpx`, and `rocm-next-fpx` images.
 
 Primary source files inspected:
 
+- <https://github.com/charlie12345/ROCmFPX/blob/experimental-rocmfpx-branch/README.md>
+- <https://github.com/charlie12345/ROCmFPX/blob/experimental-rocmfpx-branch/CMakePresets.json>
+- <https://github.com/charlie12345/ROCmFPX/blob/experimental-rocmfpx-branch/scripts/build-strix-rocmfp4-mtp.sh>
+- <https://github.com/charlie12345/ROCmFPX/blob/experimental-rocmfpx-branch/scripts/run-rocmfpx-mtp-server.sh>
 - <https://github.com/charlie12345/ROCmFPX/blob/main/README.md>
 - <https://github.com/charlie12345/ROCmFPX/blob/main/ggml/rocmfpx/README.md>
 - <https://github.com/charlie12345/ROCmFPX/blob/main/docs/ROCmFPX-EXPERIMENT.md>
@@ -49,6 +53,26 @@ ROCmFPX builds through `containers/Containerfile.rocmfpx`:
 
 The fork is pinned in `bin/build.sh` with `ROCMFPX_LLAMA_REF`. Update the pin
 only for deliberate testing because the fork is moving quickly.
+
+### Pinned Experimental Branch
+
+The experimental branch reviewed here is pinned at
+`a6a93765f7ce9779c13f9881164a65f7a9f31198`. Test it without changing normal
+FPX defaults:
+
+```bash
+ROCMFPX_LLAMA_BRANCH=experimental-rocmfpx-branch \
+ROCMFPX_LLAMA_REF=a6a93765f7ce9779c13f9881164a65f7a9f31198 \
+CPU_TARGET=strix-halo \
+bin/build.sh rocm-fpx
+```
+
+This matches the branch's known-good gfx1151 shape: HIP plus Vulkan, forced
+HIP MMQ, Release mode, and Strix CPU instructions. `CPU_TARGET=strix-halo` is
+reproducible across capable builders; the fork's host-dependent `GGML_NATIVE`
+preset remains available through `CPU_TARGET=native`. The branch's winning HIP
+decode knobs are source defaults, so leave `ROCMFPX_DECODE_TUNE=stable` unless
+running a controlled tuning sweep.
 
 ## Quantization Profiles
 
@@ -214,6 +238,12 @@ Local decision guide:
 | Strix quality probe | `FORMAT=rocmfp6 PROFILE=strix-quality` | FP6 bulk plus FP8 protected tensors. |
 | Conservative high-quality agent quant | `FORMAT=rocmfp8 PROFILE=agent` | Highest agent-protected ROCmFPX route exposed by the wrapper. |
 
+For the experimental branch, start with `Q4_0_ROCMFP4_FAST` when decode speed
+and size dominate, `Q4_0_ROCMFP4_COHERENT` or another `*_AGENT` preset for
+tools/JSON/code, and `Q4_0_ROCMFP4_STRIX_LEAN` for the branch's balanced
+gfx1151 recipe. Create quality-test quants from BF16 or F16 sources and compare
+against that source; requantized GGUFs are suitable only for smoke tests.
+
 For this repository's runtime configs, the most relevant existing downloaded
 models are already quantized. Generated model presets do not choose these
 profiles; they only detect ROCmFPX/ROCmFP4-compatible model files and route
@@ -231,6 +261,23 @@ The fork also includes TurboQuant K/V cache paths such as `turbo3` and
 `turbo4`. Those are not ROCmFPX model-weight quantization profiles. The fork's
 docs recommend asymmetric K/V for agentic serving experiments: preserve K cache
 at a safer type and compress V more aggressively.
+
+On the pinned branch, the safe asymmetric starting point is `-ctk q8_0 -ctv
+turbo4`. Symmetric TurboQuant remains an experiment, not the agent-serving
+default.
+
+For MTP/NextN models, the branch recommends Vulkan decode for measured Strix
+Halo performance and enables speculative decoding for both dense and MoE:
+
+```bash
+bin/run.sh rocm-fpx cli /path/to/model.gguf \
+  -dev Vulkan0 -ngl 999 -fa 1 --no-mmap \
+  --spec-type draft-mtp --spec-draft-n-max 6 --spec-draft-p-min 0.6
+```
+
+`-fa 1` and `--no-mmap` remain mandatory local Strix Halo defaults. MTP gains
+are content-dependent; the target model verifies drafts, and M-RoPE MTP fixes
+in this branch prevent silent fallback on Qwen3.5/Qwen3.6 architectures.
 
 This repo's generated ROCmFPX-compatible presets currently keep K/V cache at
 `f16` for the author-profiled ROCmFPX routes. Do not infer a model-weight

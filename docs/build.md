@@ -153,6 +153,22 @@ LLAMA_REF=95405ac65 bin/build.sh rocm
 ROCMFPX_LLAMA_REF=<sha> bin/build.sh rocm-fpx
 ```
 
+To reproduce the reviewed ROCmFPX experimental branch on Strix Halo without
+changing the normal `main` or generic-CPU defaults, pin both the branch and its
+commit for one build:
+
+```bash
+ROCMFPX_LLAMA_BRANCH=experimental-rocmfpx-branch \
+ROCMFPX_LLAMA_REF=a6a93765f7ce9779c13f9881164a65f7a9f31198 \
+CPU_TARGET=strix-halo \
+bin/build.sh rocm-fpx
+```
+
+This produces `localhost/strix-llama:rocm-fpx-strix-halo`. The image contains
+both HIP and Vulkan, uses the fork's in-source Strix decode defaults, and keeps
+the upstream runtime wrappers out of the image. Omit these overrides to return
+to the normal ROCmFPX `main` build.
+
 Refresh both pins to the current branch HEAD with `bin/update-refs.sh` - it
 resolves each branch tip and upserts the ids into `.env`, creating the file or
 variables if missing and leaving the rest of `.env` (including secrets)
@@ -171,7 +187,8 @@ and expose ROCm libraries through `ldconfig` instead.
 
 Optional ROCmFPX Strix decode tuning profiles mirror the fork's
 `scripts/rocmfp4-decode-tune-flags.sh` helpers. Default is `stable`, matching
-the maintainer's conservative build. Use these only for controlled experiments:
+the maintainer's in-source winning defaults on the pinned experimental branch.
+Use explicit profiles only for controlled experiments:
 
 ```bash
 ROCMFPX_DECODE_TUNE=rocmfpx-strix-nwarps2 bin/build.sh rocm-fpx
