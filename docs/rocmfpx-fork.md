@@ -45,11 +45,11 @@ Common design constraints:
 
 ROCmFPX builds through `containers/Containerfile.rocmfpx`:
 
-| Local backend | Image tag | Runtime backend |
+| Local backend | Image tag | Compiled backends and userspace |
 | --- | --- | --- |
-| `vulkan-fpx` | `localhost/strix-llama:vulkan-fpx` | Mesa RADV Vulkan. |
-| `rocm-fpx` | `localhost/strix-llama:rocm-fpx` | Stable ROCm. |
-| `rocm-next-fpx` | `localhost/strix-llama:rocm-next-fpx` | ROCm nightly tarball. |
+| `vulkan-fpx` | `localhost/strix-llama:vulkan-fpx` | Vulkan/RADV only; ROCm-independent Mesa userspace. |
+| `rocm-fpx` | `localhost/strix-llama:rocm-fpx` | HIP plus Vulkan/RADV; stable ROCm userspace. |
+| `rocm-next-fpx` | `localhost/strix-llama:rocm-next-fpx` | HIP plus Vulkan/RADV; separate nightly ROCm userspace. |
 
 The fork is pinned in `bin/build.sh` with `ROCMFPX_LLAMA_REF`. Update the pin
 only for deliberate testing because the fork is moving quickly.

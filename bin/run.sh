@@ -10,6 +10,7 @@ Options:
   --with-non-reasoning  Add generated Qwen/Qwen-derived ~non-reasoning presets
   --with-vision         Add generated ~vision presets for models with mmproj GGUF
   --with-configs        Refresh coding-tool configs from the generated preset
+  --device DEVICE       Override device in generated presets (e.g. Vulkan0)
 
 Backends:
   rocm       Stable ROCm image resolved from CPU_TARGET
@@ -50,6 +51,8 @@ Environment:
                         from ./models-template.ini and MODELS_DIR discovery
   LLAMA_MODELS_TEMPLATE Host models template file. Default: ./models-template.ini
   LLAMA_MODELS_MAX      Maximum models loaded by preset server. Default: 1
+  LLAMA_DEVICE          Override device in generated presets. Default: ROCm0 for
+                        ROCm images, Vulkan0 for Vulkan-only images
   LLAMA_PORT            Host/container server port. Default: 8080
   LLAMA_CONTEXT         Default server/CLI context and bench depth. Default: 131072
   LLAMA_BATCH           Default logical batch size. Vulkan: 2048, ROCm: 4096,
@@ -82,6 +85,7 @@ Examples:
   CPU_TARGET=strix-halo bin/run.sh rocm list-devices
   bin/run.sh rocm models
   bin/run.sh vulkan server
+  bin/run.sh --device Vulkan0 rocm-fpx server
   bin/run.sh rocm-7.2.4 server
   bin/run.sh vulkan server ~/models/model.gguf
   bin/run.sh rocm-next cli ~/models/model.gguf -p "Hello"
@@ -115,6 +119,7 @@ collect_env_names "$ENV_FILE"
 load_dotenv_defaults "$ENV_FILE"
 
 WITH_CONFIGS=0
+PRESET_DEVICE="${LLAMA_DEVICE:-}"
 GENERATE_MODELS_PRESET_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -126,6 +131,14 @@ while [[ $# -gt 0 ]]; do
       WITH_CONFIGS=1
       GENERATE_MODELS_PRESET_ARGS+=("$1")
       shift
+      ;;
+    --device)
+      if [[ $# -lt 2 || -z "$2" ]]; then
+        echo "Missing value for --device" >&2
+        exit 1
+      fi
+      PRESET_DEVICE="$2"
+      shift 2
       ;;
     --)
       shift
@@ -321,11 +334,14 @@ esac
 
 IMAGE="$IMAGE_PREFIX:$IMAGE_TAG"
 
-if [[ "$BACKEND_FAMILY" == vulkan* ]]; then
-  GENERATE_MODELS_PRESET_ARGS+=(--device Vulkan0)
-else
-  GENERATE_MODELS_PRESET_ARGS+=(--device ROCm0)
+if [[ -z "$PRESET_DEVICE" ]]; then
+  if [[ "$BACKEND_FAMILY" == vulkan* ]]; then
+    PRESET_DEVICE="Vulkan0"
+  else
+    PRESET_DEVICE="ROCm0"
+  fi
 fi
+GENERATE_MODELS_PRESET_ARGS+=(--device "$PRESET_DEVICE")
 if [[ "$BACKEND_FAMILY" == *-fpx ]]; then
   GENERATE_MODELS_PRESET_ARGS+=(--rocmfpx-only)
 fi
@@ -687,6 +703,23 @@ list_generated_models_preset() {
   update_user_configs_if_requested
 }
 
+server_strix_defaults() {
+  local arg
+  local has_flash_attn=0
+  local has_mmap=0
+
+  for arg in "$@"; do
+    case "$arg" in
+      -fa|--flash-attn|-fa=*|--flash-attn=*) has_flash_attn=1 ;;
+      --mmap|--no-mmap|--mmap=*) has_mmap=1 ;;
+    esac
+  done
+
+  SERVER_STRIX_ARGS=()
+  (( has_flash_attn )) || SERVER_STRIX_ARGS+=(-fa 1)
+  (( has_mmap )) || SERVER_STRIX_ARGS+=(--no-mmap)
+}
+
 case "$ACTION" in
   shell)
     if CONTAINER_ID="$(running_container_id)"; then
@@ -710,6 +743,7 @@ case "$ACTION" in
     PODMAN_RUN_ARGS+=(-p "$LLAMA_PORT:$LLAMA_PORT")
 
     if [[ $# -eq 0 || "$1" == -* ]]; then
+      server_strix_defaults "$@"
       if (( LLAMA_MODELS_PRESET_EXPLICIT )); then
         MODELS_PRESET="$(container_models_preset_path "$LLAMA_MODELS_PRESET")"
       else
@@ -723,6 +757,7 @@ case "$ACTION" in
         --port "$LLAMA_PORT" \
         --batch-size "$LLAMA_BATCH" \
         --ubatch-size "$LLAMA_UBATCH" \
+        "${SERVER_STRIX_ARGS[@]}" \
         "$@"
       exit 0
     fi

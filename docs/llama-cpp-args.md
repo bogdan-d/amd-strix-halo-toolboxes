@@ -49,7 +49,7 @@ These are the first knobs to decide for this repo.
 | `-c`, `--ctx-size` | Direct runs: start at `131072`; active Qwen3.6 presets: `262144` total | 131k is the conservative Strix Halo baseline; with server slots, active presets treat 256k as the shared context/KV pool. |
 | `-b`, `--batch-size` | Vulkan: `2048`; ROCm: `4096`; ROCmFPX: `512` | Logical batch. Keep ROCm at least 2x the 2048 physical microbatch for better prefill saturation; the custom ROCmFPX profile follows its model-card-derived profile. |
 | `-ub`, `--ubatch-size` | Vulkan: `512`; ROCm: `2048`; ROCmFPX: `512` | Physical batch. ROCm handles the larger Strix Halo value; keep Vulkan and the custom ROCmFPX profile at its tested value. |
-| `-ctk`, `-ctv` | Active presets use `q8_0` | Q8 KV roughly halves KV memory versus `f16` with low observed quality impact; keep `f16` as the comparison baseline. |
+| `-ctk`, `-ctv` | Active presets use `f16` | The template keeps the upstream f16 baseline; use q8_0 deliberately when KV-memory headroom matters. |
 | `--models-preset` | Use for multi-model routing | Keeps repeated server arguments in an INI file. |
 | `--spec-type draft-mtp` | Use only with MTP-capable builds/models | Enables MTP draft decoding. Pair with `--spec-draft-n-max`. |
 
@@ -81,10 +81,12 @@ The shared runtime/cache defaults come from the global `[*]` section of
 `metrics = true`, and the base `chat-template-kwargs = {"preserve_thinking": true}`
 (this kwarg is kept instead of the newer `--reasoning-preserve` for fork-image
 compatibility; see [Reasoning Preservation](#reasoning-preservation)).
-Every generated section is pinned to a single device via `--device`
-(`Vulkan0` for vulkan backends, `ROCm0` for ROCm; default `ROCm0`). ROCm device
-sections also emit `ubatch-size = 256` (the ROCm microbatch limit); Vulkan
-sections inherit `1024` from the `[*]` default. Crown Halo (`512`) and Nex
+Generated presets use the tested selectors `Vulkan0` for Vulkan-family runs and
+`ROCm0` for ROCm-family runs. Combined ROCm images expose both; pass
+`--device Vulkan0` before the backend argument to `bin/run.sh`, or set
+`LLAMA_DEVICE=Vulkan0`, to select RADV instead. ROCm device sections also emit
+`ubatch-size = 256` (the ROCm microbatch limit); Vulkan sections inherit `1024`
+from the `[*]` default. Crown Halo (`512`) and Nex
 (`256`) keep fixed ubatch sizes regardless of device. Each ROCmFPX section only
 overrides what differs: `reasoning-format = deepseek` for reasoning-on routes.
 Only models identified as MTP-capable get `~mtp` route IDs,
@@ -169,9 +171,9 @@ Usually leave these alone on Strix Halo until profiling shows CPU contention.
 | `-e`, `--escape`, `--no-escape` | both | Interpret escaped sequences in prompt input. |
 | `-np`, `--parallel` | both | CLI: parallel sequences; server: slots. In server use, `ctx-size` is the total KV/context pool and is split across slots. |
 | `--context-shift`, `--no-context-shift` | both | Allow shifting context for long/infinite generation. |
-| `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Maximum context checkpoints per slot. Active Qwen3.6 presets use `32` to avoid repeated full prompt re-processing in 4-slot agent runs. |
+| `-ctxcp`, `--ctx-checkpoints`, `--swa-checkpoints` | both | Maximum context checkpoints per slot. Active Qwen3.6 presets use `32` to avoid repeated full prompt re-processing. |
 | `-cms`, `--checkpoint-min-step` | both | Minimum token spacing between context checkpoints. Stock active presets set `256`; generated FPX fork presets omit it because the fork rejects it inside preset sections. |
-| `-cram`, `--cache-ram` | both | RAM limit for prompt/cache checkpointing. Active Qwen3.6 presets use `32768` MiB on Strix Halo unified memory. |
+| `-cram`, `--cache-ram` | both | RAM limit for prompt/cache checkpointing. Active Qwen3.6 presets use `65536` MiB on Strix Halo unified memory. |
 
 The current Vulkan image was tested with `llama-server --help`: it accepts
 `--checkpoint-min-step 256` and rejects the older
@@ -208,8 +210,8 @@ comparisons.
 | --- | --- | --- |
 | `-fa`, `--flash-attn` | both | Flash Attention mode. Use on Strix Halo. |
 | `-kvo`, `--kv-offload`, `--no-kv-offload` | both | Put KV cache on device when possible. Active Qwen3.6 presets use device KV offload. |
-| `-ctk`, `--cache-type-k` | both | KV key datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `q8_0`. |
-| `-ctv`, `--cache-type-v` | both | KV value datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `q8_0`. |
+| `-ctk`, `--cache-type-k` | both | KV key datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `f16`. |
+| `-ctv`, `--cache-type-v` | both | KV value datatype. Values accepted by the current image: `f32`, `f16`, `bf16`, `q8_0`, `q4_0`, `q4_1`, `iq4_nl`, `q5_0`, `q5_1`; active Qwen3.6 presets use `f16`. |
 | `-dt`, `--defrag-thold` | both | Deprecated KV defrag threshold. |
 | `--mlock` | both | Keep model pages resident in RAM. |
 | `--mmap`, `--no-mmap` | both | Memory-map model file. Use `--no-mmap` here. |
@@ -232,11 +234,11 @@ independent full-context model instances. Current upstream docs describe
 threads describe the practical behavior: `--ctx-size` is the total context/KV
 pool, and each slot gets roughly `ctx-size / parallel`.
 
-This repo now uses `ctx-size = 262144` and `parallel = 4` in generated presets,
-so the expected per-slot budget is about `65536` tokens. If a single request
-needs the full 262k budget, use `parallel = 1` or raise `ctx-size` by the slot
-count if memory allows. `kv-unified = on` lets slots share one KV buffer, but it
-does not make every slot a separate full-size context window.
+This repo uses `ctx-size = 262144` and `parallel = 1` in generated presets, so
+the single slot gets the full 262k budget. Raise `parallel` only when concurrent
+slots are needed, then raise `ctx-size` by the slot count if memory allows.
+`kv-unified = on` lets slots share one KV buffer, but it does not make every
+slot a separate full-size context window.
 
 ### KV Cache Quantization
 
@@ -436,7 +438,7 @@ bin/run.sh rocm run llama-server --help | grep reasoning-preserve
 | `--mmproj-auto`, `--no-mmproj`, `--no-mmproj-auto` | both | Auto-use projector when available. |
 | `--mmproj-offload`, `--no-mmproj-offload` | both | Offload projector to GPU/device. |
 | `--image`, `--audio` | cli | Image/audio input files. |
-| `--image-min-tokens` | both | Minimum dynamic image tokens. Qwen-VL logs recommend at least `1024` for grounding tasks; active Qwen3.6 presets use `1024`. |
+| `--image-min-tokens` | both | Minimum dynamic image tokens. Qwen-VL logs recommend at least `1024` for grounding tasks; only paired-mmproj vision routes generated with `--with-vision` use `1024`. |
 | `--image-max-tokens` | both | Maximum dynamic image tokens. |
 | `-mv`, `--model-vocoder` | server | Vocoder model for audio generation. |
 | `--tts-use-guide-tokens` | server | Improve TTS word recall. |

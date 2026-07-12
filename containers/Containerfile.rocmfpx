@@ -135,17 +135,16 @@ RUN --mount=type=cache,id=rocm-nightly-tarballs,target=/var/cache/rocm-nightly \
   ln -s ../lib/llvm/amdgcn/bitcode /opt/rocm/amdgcn/bitcode; \
   fi
 
-# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. ROCmFPX HIP builds
-# also enable Vulkan to match the fork's recommended fallback path.
+# Vulkan RADV: Mesa's RADV driver comes from Fedora packages. ROCmFPX HIP
+# targets include RADV as an alternate backend; the Vulkan-only target uses it
+# as the primary backend. Keep this package block unconditional across supported targets.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan-fpx" ] || [ "${BUILD_TYPE}" = "rocm-fpx" ] || [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   echo ">>> Installing Vulkan RADV builder packages"; \
   dnf -y --nodocs --setopt=install_weak_deps=False \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
   vulkan-loader-devel vulkaninfo mesa-vulkan-drivers \
-  spirv-headers-devel radeontop glslc glslang; \
-  fi
+  spirv-headers-devel radeontop glslc glslang
 
 # Build-time ROCm/HIP paths are needed for the TheRock nightly tarball target.
 # They are intentionally not exported in the final runtime image.
@@ -270,7 +269,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=ON \
+    -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
@@ -294,15 +293,15 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=ON \
+    -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_BUILD_TESTS=OFF \
     -DROCM_PATH=/opt/rocm \
     -DHIP_PATH=/opt/rocm \
     -DHIP_PLATFORM=amd; \
   elif [ "${BUILD_TYPE}" = "vulkan-fpx" ]; then \
   cmake -S . -B "${build_dir}" -G Ninja \
-    -DGGML_VULKAN=ON \
     -DGGML_HIP=OFF \
+    -DGGML_VULKAN=ON \
     -DGGML_CUDA=OFF \
     -DLLAMA_CURL=OFF \
     ${cpu_flags} \
@@ -313,7 +312,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     -DLLAMA_BUILD_SERVER=ON \
     -DLLAMA_BUILD_WEBUI=OFF \
     -DLLAMA_USE_PREBUILT_WEBUI=OFF \
-    -DLLAMA_BUILD_TESTS=ON \
+    -DLLAMA_BUILD_TESTS=OFF \
     -DGGML_BUILD_TESTS=OFF; \
   fi \
   && cmake --build "${build_dir}" --config Release \
@@ -324,10 +323,7 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     llama-gguf-split \
     llama-quantize \
     llama-completion \
-    llama-perplexity \
-    test-backend-ops \
-    test-quantize-fns \
-    test-quantize-perf
+    llama-perplexity
 
 RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
   echo ">>> Installing llama.cpp runtime artifacts" \
@@ -342,9 +338,6 @@ RUN --mount=type=cache,id=llama-source-rocmfpx,target=/opt/llama.cpp \
     "/opt/llama.cpp/${build_dir}/bin/llama-quantize" \
     "/opt/llama.cpp/${build_dir}/bin/llama-completion" \
     "/opt/llama.cpp/${build_dir}/bin/llama-perplexity" \
-    "/opt/llama.cpp/${build_dir}/bin/test-backend-ops" \
-    "/opt/llama.cpp/${build_dir}/bin/test-quantize-fns" \
-    "/opt/llama.cpp/${build_dir}/bin/test-quantize-perf" \
     /usr/local/bin/ \
   && find "/opt/llama.cpp/${build_dir}" -type f -name 'lib*.so*' -exec cp {} /usr/local/lib64/ \; \
   && ldconfig
@@ -387,7 +380,8 @@ RUN case "${BUILD_TYPE}" in \
   esac
 
 # ROCm stable runtime packages come from AMD's repository. Nightlies bring their
-# own /opt/rocm tree from the builder; Vulkan uses only Fedora Mesa packages.
+# own /opt/rocm tree from the builder. Fedora Mesa RADV is installed for every
+# target: alternate backend for ROCmFPX HIP, primary backend for Vulkan-only.
 RUN if [ "${BUILD_TYPE}" = "rocm-fpx" ]; then \
   printf '%s\n' \
   "[ROCm-${ROCM_VERSION}]" \
@@ -420,16 +414,14 @@ RUN --mount=type=cache,id=dnf-rocm-724,target=/var/cache/libdnf5 \
   hip-runtime-amd rocblas hipblas rocminfo; \
   fi
 
-# Vulkan RADV runtime: ROCmFPX HIP images include Fedora Mesa RADV as the
-# fork-recommended fallback backend.
+# Vulkan RADV runtime: ROCmFPX HIP images include Fedora Mesa RADV as an
+# alternate backend; Vulkan-only uses it as the primary backend.
 RUN --mount=type=cache,id=dnf-vulkan-radv,target=/var/cache/libdnf5 \
-  if [ "${BUILD_TYPE}" = "vulkan-fpx" ] || [ "${BUILD_TYPE}" = "rocm-fpx" ] || [ "${BUILD_TYPE}" = "rocm-next-fpx" ]; then \
   echo ">>> Installing Vulkan RADV runtime packages"; \
   microdnf -y --nodocs --setopt=install_weak_deps=0 \
   --exclude='*sdk*' --exclude='*samples*' --exclude='*-doc*' --exclude='*-docs*' \
   install \
-  vulkan-loader vulkaninfo mesa-vulkan-drivers; \
-  fi
+  vulkan-loader vulkaninfo mesa-vulkan-drivers
 
 COPY --from=builder /opt/rocm-runtime/ /opt/rocm/
 COPY --from=builder /usr/local/ /usr/local/

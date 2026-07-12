@@ -25,8 +25,9 @@ VRAM planning — lives in [docs/hardware.md](docs/hardware.md).
 
 ## Quick start
 
-`bin/run.sh` wraps `podman run` with the correct device mounts (`/dev/dri`,
-`/dev/kfd`), the Strix Halo defaults, and automatic model discovery.
+`bin/run.sh` wraps `podman run` with the correct device mounts: combined ROCm
+images get `/dev/dri` and `/dev/kfd`; Vulkan-only images get `/dev/dri`. It also
+applies the Strix Halo defaults and automatic model discovery.
 
 ```bash
 export MODELS_DIR=/path/to/your/models
@@ -45,14 +46,21 @@ By default `server` generates a temporary llama.cpp `--models-preset` from the
 tracked `models-template.ini` plus the GGUF files found under `MODELS_DIR`;
 clients select a model by its provider-qualified preset name. Preset runs take
 their remaining defaults from `models-template.ini`: flash attention on, `mmap`
-off, full GPU offload, ~262k total context across four slots, q8_0 KV cache, and
-MTP settings for detected MTP models.
+off, full GPU offload, ~262k total context in one slot, f16 KV cache, and MTP
+settings for detected MTP models.
 
 **Backend names:** `vulkan`, `rocm`, `rocm-7.2.4`, `rocm-next`
 (`rocm7-nightlies`), plus the experimental ROCmFPX forks `vulkan-fpx`,
-`rocm-fpx`, and `rocm-next-fpx`. When `CPU_TARGET` is set (e.g.
-`CPU_TARGET=strix-halo`), the helper resolves the matching CPU-targeted tag
-automatically.
+`rocm-fpx`, and `rocm-next-fpx`. `rocm`/`rocm-fpx` and
+`rocm-next`/`rocm-next-fpx` include HIP plus Vulkan/RADV; `vulkan` and
+`vulkan-fpx` are Vulkan-only and ROCm-independent. Stable ROCm and ROCm
+nightly userspace remain separate image families. When `CPU_TARGET` is set
+(e.g. `CPU_TARGET=strix-halo`), the helper resolves the matching CPU-targeted
+tag automatically.
+
+Combined images can list the physical APU through both backends. Backend choice
+therefore follows llama.cpp device ordering unless a selection has been
+validated; use a standalone Vulkan image for deterministic Vulkan runs.
 
 ### Coding-tool configs
 
@@ -85,7 +93,7 @@ Images build with Buildah through `bin/build.sh` (it defaults to `buildah`; set
 `BUILDER=podman` to use Podman):
 
 ```bash
-bin/build.sh all            # rocm, rocm-next, vulkan
+bin/build.sh all            # rocm, rocm-next, vulkan, rocm-fpx, rocm-next-fpx, vulkan-fpx
 bin/build.sh vulkan         # a single target
 DRY_RUN=1 bin/build.sh all  # print the build commands only
 ```

@@ -39,7 +39,7 @@ jobs:
           # Normalize commas / whitespace to single spaces.
           IN_CLEAN="$(printf '%s' "$IN" | tr ',[:space:]' '  ' | xargs)"
           if [[ "$IN_CLEAN" == "all" ]]; then
-            IN_CLEAN="rocm rocm-next vulkan"
+            IN_CLEAN="rocm rocm-next vulkan rocm-fpx rocm-next-fpx vulkan-fpx"
           fi
           KNOWN="rocm rocm-next vulkan vulkan-fpx rocm-fpx rocm-next-fpx"
           JSON="["

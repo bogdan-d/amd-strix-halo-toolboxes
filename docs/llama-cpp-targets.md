@@ -13,13 +13,10 @@ The current stock and ROCmFPX images build:
 - `llama-gguf-split`
 - `llama-quantize`
 
-The ROCmFPX images also build the maintainer fork's validation tools:
+The ROCmFPX images also retain two maintainer-fork utilities:
 
 - `llama-completion`
 - `llama-perplexity`
-- `test-backend-ops`
-- `test-quantize-fns`
-- `test-quantize-perf`
 
 ## Runtime Targets
 
@@ -87,9 +84,7 @@ The ROCmFPX images also build the maintainer fork's validation tools:
 | `llama-debug-template-parser` | Chat-template parser debug utility. | Not built. |
 | `llama-template-analysis` | Chat-template analysis tool. | Not built. |
 | `llama-gen-docs` | Generate llama.cpp argument documentation from built metadata. | Not built. Build/dev only. |
-| `test-backend-ops` | Backend operation regression test. | ROCmFPX only. |
-| `test-quantize-fns` | Quantization correctness regression test. | ROCmFPX only. |
-| `test-quantize-perf` | Quantization performance regression test. | ROCmFPX only. |
+| Fork test executables | Backend/quantization regression tests. | Not built into runtime images. |
 | `rpc-server` | RPC backend worker for distributed llama.cpp runs. | Not built. RPC is intentionally disabled in the next Containerfile. |
 
 ## Reconsideration Notes

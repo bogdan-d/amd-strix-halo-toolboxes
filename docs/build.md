@@ -50,6 +50,11 @@ The `*-fpx` targets build the ROCmFPX fork against the same
 Vulkan/stable ROCm/ROCm nightly backend matrix. They are included in
 `all` and `all-fpx`; use `all-stock` to skip them.
 
+`rocm`, `rocm-next`, `rocm-fpx`, and `rocm-next-fpx` compile both HIP and
+Vulkan and include the shared Fedora Mesa RADV dependencies. The stable and
+nightly ROCm userspace payloads remain separate. `vulkan` and `vulkan-fpx`
+compile Vulkan only and carry no ROCm userspace dependency.
+
 ## Build Script
 
 `bin/build.sh` uses Buildah by default:
@@ -204,10 +209,9 @@ rocmfpx-strix-moe-rpb1, rocmfpx-strix-moe-rpb2, rocmfpx-strix-moe-rpb3, rocmfpx-
 rocmfpx-strix-vdr2, rocmfpx-strix-vdr8
 ```
 
-The ROCmFPX HIP builds follow the same backend flags and also build the fork's
-validation-facing targets used by its smoke scripts: `llama-completion`,
-`llama-perplexity`, `test-backend-ops`, `test-quantize-fns`, and
-`test-quantize-perf`.
+The ROCmFPX builds retain the fork's `llama-completion` and
+`llama-perplexity` utilities alongside the common runtime binaries. They do
+not ship fork test executables.
 
 The fork also exposes quantization-time profiles such as `PROFILE=agent`,
 `PROFILE=strix-lean`, `PROFILE=strix-speed`, and `PROFILE=strix-quality` through
